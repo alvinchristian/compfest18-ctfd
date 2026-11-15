@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .draft-page {
+    --draft-blue: #2f80ed;
+    --draft-blue-dark: #145dbf;
+    --draft-blue-soft: #eaf3ff;
+    min-height: calc(100vh - 10rem);
+    padding: 3rem 0 4rem;
+    background: radial-gradient(circle at top, rgba(47, 128, 237, .14), transparent 42%);
+  }
+  .draft-shell { max-width: 1120px; margin: 0 auto; }
+  .draft-panel { border: 1px solid rgba(47, 128, 237, .2); border-radius: 1rem; background: var(--bs-body-bg, #fff); box-shadow: 0 .7rem 2rem rgba(20, 93, 191, .1); }
+  .draft-match { display: none; }
+  .draft-match.is-visible { display: block; }
+  .draft-versus { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 1rem; align-items: center; }
+  .draft-team { padding: 1rem; border: 2px solid transparent; border-radius: .75rem; background: var(--draft-blue-soft); transition: border-color .2s, box-shadow .2s; }
+  .draft-team.is-active { border-color: var(--draft-blue); box-shadow: 0 0 0 .25rem rgba(47, 128, 237, .13); }
+  .draft-team:last-child { text-align: right; }
+  .draft-seed { color: var(--draft-blue-dark); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .draft-team-name { overflow-wrap: anywhere; font-size: clamp(1rem, 2.5vw, 1.45rem); font-weight: 800; }
+  .draft-vs { color: var(--draft-blue); font-size: 1.1rem; font-weight: 900; }
+  .draft-timer { color: var(--draft-blue); font-size: clamp(3rem, 10vw, 5.5rem); font-variant-numeric: tabular-nums; font-weight: 900; line-height: 1; }
+  .draft-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+  .draft-category {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 145px;
+    padding: 1.25rem;
+    overflow: hidden;
+    border: 2px solid #b9d6fb;
+    border-radius: .85rem;
+    color: #173a68;
+    background: linear-gradient(145deg, #fff, var(--draft-blue-soft));
+    box-shadow: 0 .35rem .9rem rgba(20, 93, 191, .08);
+    font-size: 1.05rem;
+    font-weight: 800;
+    text-align: center;
+    overflow-wrap: anywhere;
+    transition: transform .16s, border-color .16s, box-shadow .16s;
+  }
+  button.draft-category:not(:disabled):hover, button.draft-category:not(:disabled):focus { transform: translateY(-3px); border-color: var(--draft-blue); box-shadow: 0 .55rem 1.2rem rgba(20, 93, 191, .2); outline: none; }
+  .draft-category:disabled { opacity: 1; cursor: default; }
+  .draft-category.is-readonly { border-style: dashed; color: #6c86a8; background: #f4f8fd; }
+  .draft-category.is-selectable { border-color: var(--draft-blue); cursor: pointer; }
+  .draft-category.is-banned { border-color: var(--draft-blue-dark); color: #fff; background: linear-gradient(145deg, #327edc, #113f7d); }
+  .draft-category__ban { position: absolute; right: 0; bottom: 0; left: 0; padding: .35rem .5rem; background: rgba(4, 26, 55, .72); font-size: .68rem; font-weight: 700; letter-spacing: .02em; }
+  .draft-idle { min-height: 390px; display: grid; place-items: center; padding: 3rem 1rem; text-align: center; }
+  .draft-live-dot { display: inline-block; width: .55rem; height: .55rem; margin-right: .35rem; border-radius: 50%; background: #28a745; box-shadow: 0 0 0 .25rem rgba(40, 167, 69, .13); }
+  .draft-message { min-height: 1.5rem; }
+  .draft-wheel-panel { display: none; text-align: center; }
+  .draft-wheel-panel.is-visible { display: block; }
+  .draft-wheel-shell { position: relative; width: min(78vw, 570px); margin: 0 auto; }
+  .draft-wheel-pointer { position: absolute; z-index: 2; left: 50%; top: -3px; transform: translateX(-50%); width: 0; height: 0; border-right: 21px solid transparent; border-left: 21px solid transparent; border-top: 40px solid var(--draft-blue-dark); filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .24)); }
+  #draft-wheel { display: block; width: 100%; height: auto; border: 8px solid var(--draft-blue); border-radius: 50%; background: #fff; box-shadow: 0 1rem 2.5rem rgba(20, 93, 191, .24); }
+  #draft-wheel.is-spinning { transition: transform 5.2s cubic-bezier(.12, .78, .12, 1); }
+  .draft-wheel-result { min-height: 5rem; opacity: 0; transform: translateY(.5rem); transition: opacity .25s, transform .25s; }
+  .draft-wheel-result.is-visible { opacity: 1; transform: translateY(0); }
+  @media (max-width: 575px) {
+    .draft-page { padding-top: 2rem; }
+    .draft-versus { grid-template-columns: 1fr; text-align: center; }
+    .draft-team:last-child { text-align: center; }
+    .draft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+    .draft-category { min-height: 120px; padding: .8rem; font-size: .9rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { #draft-wheel.is-spinning { transition-duration: .01ms; } }
+</style>
+
+<div class="draft-page">
+  <div class="container draft-shell">
+    <div class="text-center mb-4">
+      <h1 class="h2 mb-2">1v1 Draft Pick</h1>
+      <p class="text-muted mb-0"><span class="draft-live-dot"></span>Live category ban phase</p>
+    </div>
+
+    <div id="draft-idle" class="draft-panel draft-idle">
+      <div>
+        <i class="fas fa-hourglass-start fa-4x text-primary mb-4"></i>
+        <h2 class="h4" id="draft-idle-title">Waiting for the next match</h2>
+        <p class="text-muted mb-0" id="draft-idle-copy">This page will update automatically when an admin starts a match.</p>
+      </div>
+    </div>
+
+    <div id="draft-match" class="draft-match">
+      <div class="draft-panel p-3 p-md-4 mb-4" id="draft-ban-panel">
+        <div class="text-center mb-3">
+          <span class="badge badge-primary" id="draft-match-label"></span>
+        </div>
+        <div class="draft-versus">
+          <div class="draft-team" id="draft-team-one">
+            <div class="draft-seed" id="draft-team-one-seed"></div>
+            <div class="draft-team-name" id="draft-team-one-name"></div>
+          </div>
+          <div class="draft-vs">VS</div>
+          <div class="draft-team" id="draft-team-two">
+            <div class="draft-seed" id="draft-team-two-seed"></div>
+            <div class="draft-team-name" id="draft-team-two-name"></div>
+          </div>
+        </div>
+
+        <div class="text-center pt-4">
+          <div class="draft-timer" id="draft-timer">—</div>
+          <h2 class="h5 mt-2 mb-1" id="draft-turn-title"></h2>
+          <p class="text-muted draft-message mb-0" id="draft-turn-message"></p>
+        </div>
+      </div>
+
+      <div class="draft-grid" id="draft-categories" aria-live="polite"></div>
+
+      <div class="draft-wheel-panel" id="draft-wheel-panel">
+        <div class="draft-panel p-3 p-md-4">
+          <span class="badge badge-primary mb-2" id="draft-wheel-game"></span>
+          <h2 class="h3 mb-2" id="draft-wheel-title">Spin Wheel</h2>
+          <p class="text-muted mb-4" id="draft-wheel-message">The banned categories have been removed. Selecting the challenge…</p>
+          <button type="button" class="btn btn-primary btn-lg mb-4" id="draft-tiebreaker-spin" style="display: none;">Spin tiebreaker wheel</button>
+          <div class="alert alert-info text-center py-3 px-4 mb-4" id="draft-game-timer-panel" style="display: none !important;" role="status" aria-label="1v1 game countdown">
+            <strong class="display-4 mb-0 d-block" id="draft-game-timer" style="font-variant-numeric: tabular-nums; letter-spacing: .08em;">20:00</strong>
+          </div>
+          <div class="draft-wheel-shell">
+            <div class="draft-wheel-pointer" aria-hidden="true"></div>
+            <canvas id="draft-wheel" width="760" height="760" role="img" aria-label="Automatic category selection wheel"></canvas>
+          </div>
+          <div class="draft-wheel-result pt-4" id="draft-wheel-result" aria-live="polite">
+            <p class="text-uppercase text-primary font-weight-bold mb-1">The wheel chose</p>
+            <h3 class="h2 mb-2" id="draft-wheel-category"></h3>
+            <p class="lead mb-0" id="draft-wheel-challenge"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const stateUrl = {{ url_for('onevone.draft_state') | tojson }};
+    const eventsUrl = {{ url_for('onevone.live_events') | tojson }};
+    const banUrl = {{ url_for('onevone.draft_ban') | tojson }};
+    const tiebreakerSpinUrl = {{ url_for('onevone.tiebreaker_spin') | tojson }};
+    const csrfNonce = {{ Session.nonce | tojson }};
+    const idle = document.getElementById("draft-idle");
+    const idleTitle = document.getElementById("draft-idle-title");
+    const idleCopy = document.getElementById("draft-idle-copy");
+    const matchPanel = document.getElementById("draft-match");
+    const banPanel = document.getElementById("draft-ban-panel");
+    const categoryGrid = document.getElementById("draft-categories");
+    const wheelPanel = document.getElementById("draft-wheel-panel");
+    const wheelCanvas = document.getElementById("draft-wheel");
+    const wheelResult = document.getElementById("draft-wheel-result");
+    const wheelCategory = document.getElementById("draft-wheel-category");
+    const wheelChallenge = document.getElementById("draft-wheel-challenge");
+    const wheelMessage = document.getElementById("draft-wheel-message");
+    const wheelTitle = document.getElementById("draft-wheel-title");
+    const tiebreakerSpinButton = document.getElementById("draft-tiebreaker-spin");
+    const gameTimerPanel = document.getElementById("draft-game-timer-panel");
+    const gameTimer = document.getElementById("draft-game-timer");
+    const timer = document.getElementById("draft-timer");
+    const turnTitle = document.getElementById("draft-turn-title");
+    const turnMessage = document.getElementById("draft-turn-message");
+    const teamCards = [document.getElementById("draft-team-one"), document.getElementById("draft-team-two")];
+    let currentState = null;
+    let clockOffset = 0;
+    let submitting = false;
+    let animatedDraftId = null;
+    let expirationRefreshRequested = false;
+
+    function setIdle(title, copy) {
+      idleTitle.textContent = title;
+      idleCopy.textContent = copy;
+      idle.style.display = "grid";
+      matchPanel.classList.remove("is-visible");
+    }
+
+    function drawWheel(categories) {
+      const context = wheelCanvas.getContext("2d");
+      const size = wheelCanvas.width;
+      const center = size / 2;
+      const radius = center - 10;
+      const slice = (Math.PI * 2) / categories.length;
+      const colors = ["#145dbf", "#2f80ed", "#4c97f5", "#0d4f9f", "#69aaf8", "#246fcf"];
+      context.clearRect(0, 0, size, size);
+      context.font = "700 28px Arial, sans-serif";
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+      categories.forEach((category, index) => {
+        const start = -Math.PI / 2 + index * slice;
+        context.beginPath();
+        context.moveTo(center, center);
+        context.arc(center, center, radius, start, start + slice);
+        context.closePath();
+        context.fillStyle = colors[index % colors.length];
+        context.fill();
+        context.strokeStyle = "rgba(255, 255, 255, .92)";
+        context.lineWidth = 4;
+        context.stroke();
+        context.save();
+        context.translate(center, center);
+        context.rotate(start + slice / 2);
+        context.fillStyle = "#fff";
+        const label = category.length > 22 ? `${category.slice(0, 21)}…` : category;
+        context.fillText(label, radius - 28, 0);
+        context.restore();
+      });
+    }
+
+    function showAndSpinWheel(state) {
+      const wheel = state.wheel;
+      banPanel.style.display = "none";
+      categoryGrid.style.display = "none";
+      wheelPanel.classList.add("is-visible");
+      document.getElementById("draft-wheel-game").textContent = `Game ${state.game_number}`;
+      tiebreakerSpinButton.style.display = "none";
+      if (!wheel || !wheel.categories || !wheel.categories.length) return;
+
+      const isTiebreaker = Boolean(wheel.is_tiebreaker);
+      const animationKey = isTiebreaker ? `tiebreaker-${state.game && state.game.id}` : state.id;
+      wheelTitle.textContent = isTiebreaker ? "Tiebreaker Spin Wheel" : "Spin Wheel";
+      drawWheel(wheel.categories);
+
+      if (isTiebreaker && !wheel.challenge) {
+        animatedDraftId = animationKey;
+        wheelResult.classList.remove("is-visible");
+        wheelCanvas.classList.remove("is-spinning");
+        wheelCanvas.style.transform = "rotate(0deg)";
+        wheelMessage.textContent = state.is_admin
+          ? "Click the button to spin the tiebreaker wheel."
+          : "Waiting for the administrator to spin the tiebreaker wheel.";
+        if (state.is_admin) tiebreakerSpinButton.style.display = "inline-block";
+        return;
+      }
+      if (animatedDraftId === animationKey) return;
+
+      animatedDraftId = animationKey;
+      wheelResult.classList.remove("is-visible");
+      wheelCanvas.classList.remove("is-spinning");
+
+      const chosenIndex = wheel.categories.indexOf(wheel.selected_category);
+      const sliceDegrees = 360 / wheel.categories.length;
+      const chosenCenter = (chosenIndex + .5) * sliceDegrees;
+      const targetRotation = (360 - chosenCenter) % 360 + 360 * 7;
+      const reveal = () => {
+        wheelCategory.textContent = wheel.selected_category;
+        wheelChallenge.textContent = wheel.challenge ? `Challenge revealed: ${wheel.challenge.name}` : "";
+        if (state.game && state.game.is_tiebreaker) {
+          wheelMessage.textContent = "Tiebreaker: no timer. The first team to solve wins the round.";
+        } else if (state.game && !state.game.started_at) {
+          wheelMessage.textContent = "Challenge revealed. An administrator must start the 20-minute game timer.";
+        } else {
+          wheelMessage.textContent = "The game is live.";
+        }
+        wheelResult.classList.add("is-visible");
+        try { window.localStorage.setItem(`onevone-wheel-stopped-${animationKey}`, "1"); } catch (_) {}
+      };
+      let alreadyStopped = false;
+      try { alreadyStopped = window.localStorage.getItem(`onevone-wheel-stopped-${animationKey}`) === "1"; } catch (_) {}
+      if (alreadyStopped) {
+        // This draft was already displayed in this browser; do not replay it.
+        wheelCanvas.style.transform = `rotate(${targetRotation}deg)`;
+        reveal();
+        return;
+      }
+      wheelCanvas.style.transform = "rotate(0deg)";
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        wheelCanvas.classList.add("is-spinning");
+        wheelCanvas.style.transform = `rotate(${targetRotation}deg)`;
+      }));
+      wheelCanvas.addEventListener("transitionend", reveal, { once: true });
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) window.setTimeout(reveal, 50);
+    }
+
+    function setTeam(index, team) {
+      document.getElementById(`draft-team-${index === 0 ? "one" : "two"}-seed`).textContent = `Seed #${team.seed}`;
+      document.getElementById(`draft-team-${index === 0 ? "one" : "two"}-name`).textContent = team.name;
+      teamCards[index].classList.toggle("is-active", currentState.current_team && currentState.current_team.id === team.id);
+    }
+
+    async function submitBan(category) {
+      if (submitting || !currentState || !currentState.can_ban) return;
+      submitting = true;
+      turnMessage.textContent = `Admin is banning ${category}…`;
+      try {
+        const response = await fetch(banUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "CSRF-Token": csrfNonce,
+          },
+          body: JSON.stringify({ category }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.message || "Unable to ban that category.");
+        render(payload.data);
+      } catch (error) {
+        turnMessage.textContent = error.message || "Unable to submit the ban.";
+      } finally {
+        submitting = false;
+      }
+    }
+
+    async function spinTiebreaker() {
+      if (submitting || !currentState || !currentState.is_admin) return;
+      submitting = true;
+      tiebreakerSpinButton.disabled = true;
+      wheelMessage.textContent = "Selecting the tiebreaker challenge…";
+      try {
+        const response = await fetch(tiebreakerSpinUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "CSRF-Token": csrfNonce,
+          },
+          body: JSON.stringify({}),
+        });
+        const responseText = await response.text();
+        let payload;
+        try {
+          payload = JSON.parse(responseText);
+        } catch (_) {
+          throw new Error(`The tiebreaker spin request returned an invalid response (${response.status}).`);
+        }
+        if (!response.ok || !payload.success) throw new Error(payload.message || "Unable to spin the tiebreaker wheel.");
+        animatedDraftId = null;
+        render(payload.data);
+      } catch (error) {
+        wheelMessage.textContent = error.message || "Unable to spin the tiebreaker wheel.";
+        tiebreakerSpinButton.disabled = false;
+      } finally {
+        submitting = false;
+      }
+    }
+
+    function renderCategories(categories) {
+      categoryGrid.replaceChildren();
+      categories.forEach((category) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "draft-category";
+        card.disabled = category.banned || !currentState.can_ban || submitting;
+        if (!category.banned && !currentState.can_ban) {
+          card.classList.add("is-readonly");
+          card.title = "Only the administrator can submit category bans.";
+          card.setAttribute("aria-disabled", "true");
+        }
+        card.classList.toggle("is-banned", category.banned);
+        card.classList.toggle("is-selectable", !card.disabled);
+
+        const name = document.createElement("span");
+        name.textContent = category.name;
+        card.appendChild(name);
+        if (category.banned) {
+          const detail = document.createElement("span");
+          detail.className = "draft-category__ban";
+          detail.textContent = `Banned by ${category.team}${category.automatic ? " · automatic" : ""}`;
+          card.appendChild(detail);
+        } else if (!currentState.can_ban) {
+          const detail = document.createElement("span");
+          detail.className = "draft-category__ban";
+          detail.textContent = "Admin selects ban";
+          card.appendChild(detail);
+        } else {
+          card.addEventListener("click", () => submitBan(category.name));
+        }
+        categoryGrid.appendChild(card);
+      });
+    }
+
+    tiebreakerSpinButton.addEventListener("click", spinTiebreaker);
+    wheelCanvas.addEventListener("click", () => {
+      if (currentState && currentState.is_admin && currentState.game && currentState.game.is_tiebreaker
+          && currentState.wheel && !currentState.wheel.challenge) {
+        spinTiebreaker();
+      }
+    });
+
+    function render(state) {
+      if (!currentState || (currentState.game && state.game && currentState.game.id !== state.game.id)
+          || (currentState.game && state.game && currentState.game.deadline !== state.game.deadline)) {
+        expirationRefreshRequested = false;
+      }
+      currentState = state;
+      if (state.server_time) clockOffset = Date.parse(state.server_time) - Date.now();
+      if (state.status === "disabled") {
+        setIdle("Draft pick is unavailable", "The 1v1 tournament is currently disabled.");
+        return;
+      }
+      if (state.status === "idle" || !state.match) {
+        setIdle("Waiting for the next match", "This page will update automatically when an admin starts a match.");
+        return;
+      }
+
+      idle.style.display = "none";
+      matchPanel.classList.add("is-visible");
+      document.getElementById("draft-match-label").textContent = `Match ${state.match.sequence} · Game ${state.game_number} · ${state.match.label}`;
+      setTeam(0, state.match.teams[0]);
+      setTeam(1, state.match.teams[1]);
+      if (state.status === "active") {
+        timer.textContent = "—";
+        banPanel.style.display = "block";
+        categoryGrid.style.display = "grid";
+        wheelPanel.classList.remove("is-visible");
+        renderCategories(state.categories);
+      }
+
+      if (state.status === "completed") {
+        teamCards.forEach((card) => card.classList.remove("is-active"));
+        showAndSpinWheel(state);
+      } else if (state.status === "error") {
+        timer.textContent = "!";
+        turnTitle.textContent = "Automatic spin unavailable";
+        turnMessage.textContent = state.message || "Ask an administrator to check the challenge pool.";
+      } else {
+        turnTitle.textContent = `${state.current_team.name} is banning`;
+        turnMessage.textContent = state.is_admin
+          ? "Choose the category the active team requested verbally."
+          : "Tell the admin which category your team wants to ban.";
+      }
+      updateGameTimer();
+    }
+
+    function updateTimer() {
+      if (!currentState || currentState.status !== "active" || !currentState.deadline) return;
+      const remaining = Math.max(0, Date.parse(currentState.deadline) - (Date.now() + clockOffset));
+      timer.textContent = String(Math.ceil(remaining / 1000)).padStart(2, "0");
+      return;
+    }
+
+    function updateGameTimer() {
+      const game = currentState && currentState.game;
+      if (!game || game.is_tiebreaker) {
+        gameTimerPanel.style.setProperty("display", "none", "important");
+        return;
+      }
+      gameTimerPanel.style.setProperty("display", "inline-block", "important");
+      if (game.paused) {
+        const paused = Math.max(0, Number(game.paused_remaining_seconds || 0));
+        gameTimer.textContent = formatDuration(paused);
+        gameTimerPanel.className = "alert alert-warning text-center py-3 px-4 mb-4";
+        return;
+      }
+      if (!game.started_at) {
+        gameTimer.textContent = formatDuration(game.timer_seconds || 0);
+        gameTimerPanel.className = "alert alert-secondary text-center py-3 px-4 mb-4";
+        return;
+      }
+      const remaining = game.deadline
+        ? Math.max(0, Date.parse(game.deadline) - (Date.now() + clockOffset))
+        : 0;
+      gameTimer.textContent = formatDuration(Math.ceil(remaining / 1000));
+      gameTimerPanel.className = "alert alert-info text-center py-3 px-4 mb-4";
+      if (remaining <= 0 && !expirationRefreshRequested) {
+        expirationRefreshRequested = true;
+        fetchState();
+      }
+    }
+
+    function formatDuration(totalSeconds) {
+      const seconds = Math.max(0, Math.floor(totalSeconds));
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const remainder = seconds % 60;
+      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+    }
+
+    async function fetchState() {
+      try {
+        const response = await fetch(stateUrl, {
+          credentials: "same-origin",
+          headers: { "Accept": "application/json" },
+          cache: "no-store",
+        });
+        const payload = await response.json();
+        if (response.ok && payload.success) render(payload.data);
+      } catch (_error) {
+        if (!currentState) setIdle("Reconnecting…", "Waiting for the live draft server.");
+      }
+    }
+
+    const eventStream = new EventSource(eventsUrl);
+    eventStream.addEventListener("onevone_draft_update", fetchState);
+    eventStream.onerror = () => {
+      // EventSource automatically reconnects; keep the current state visible.
+    };
+
+    window.setInterval(() => {
+      updateTimer();
+      updateGameTimer();
+    }, 200);
+    fetchState();
+  })();
+</script>
+{% endblock %}

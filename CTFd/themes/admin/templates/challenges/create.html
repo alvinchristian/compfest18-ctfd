@@ -1,0 +1,138 @@
+{% block header %}
+{% endblock %}
+
+<form method="POST" action="{{ script_root }}/admin/challenges/new" enctype="multipart/form-data">
+	{% block name %}
+	<div class="form-group">
+		<label>
+			Name:<br>
+			<small class="form-text text-muted">
+				The name of your challenge
+			</small>
+		</label>
+		<input type="text" class="form-control" name="name" placeholder="Enter challenge name">
+	</div>
+	{% endblock %}
+
+	{% block category %}
+	<div class="form-group">
+		<label>
+			Category:<br>
+			<small class="form-text text-muted">
+				The category of your challenge
+			</small>
+		</label>
+		<input type="text" class="form-control" name="category" placeholder="Enter challenge category">
+	</div>
+	{% endblock %}
+
+	{% block competition_mode %}
+	<div class="form-group">
+		<label>
+			Challenge Set:<br>
+			<small class="form-text text-muted">
+				Jeopardy challenges appear on the standard board. 1v1 challenges are reserved for the spin wheel.
+			</small>
+		</label>
+		<select class="form-control custom-select" name="competition_mode">
+			<option value="jeopardy" selected>Standard Jeopardy</option>
+			<option value="onevone">1v1 qualifier</option>
+			<option value="onevone_tiebreaker">1v1 tiebreaker</option>
+			<option value="onevone_grand_final">1v1 grand final</option>
+		</select>
+	</div>
+	{% endblock %}
+
+	{% block team_visibility %}
+	<div class="form-group">
+		<label for="team-visibility-picker">Team visibility</label>
+		<small class="form-text text-muted mb-2">Leave empty to show this challenge to all teams. Select teams to restrict it.</small>
+		<div class="dropdown" id="team-visibility-picker">
+			<button class="btn btn-outline-secondary dropdown-toggle w-100 text-left" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+				<span class="team-visibility-label">All teams</span>
+			</button>
+			<div class="dropdown-menu w-100 p-2" style="max-height: 320px; overflow-y: auto;">
+				<input type="search" class="form-control form-control-sm mb-2 team-visibility-search" placeholder="Search teams..." autocomplete="off">
+				<div class="team-visibility-options">
+					{% for team in teams or [] %}
+					<label class="dropdown-item d-flex align-items-center team-visibility-option mb-0" data-team-name="{{ team.name|lower }}">
+						<input type="checkbox" class="mr-2 team-visibility-checkbox" value="{{ team.id }}">
+						<span>{{ team.name }}</span>
+					</label>
+					{% endfor %}
+				</div>
+			</div>
+		</div>
+		<input type="hidden" id="team-visibility" name="team_visibility" value="[]">
+	</div>
+	<script>
+		(() => {
+			const picker = document.getElementById("team-visibility-picker");
+			const form = picker.closest("form");
+			const output = document.getElementById("team-visibility");
+			const label = picker.querySelector(".team-visibility-label");
+			const checkboxes = () => [...picker.querySelectorAll(".team-visibility-checkbox")];
+			const update = () => {
+				const selected = checkboxes().filter(input => input.checked);
+				output.value = JSON.stringify(selected.map(input => Number(input.value)));
+				label.textContent = selected.length ? `${selected.length} team${selected.length === 1 ? "" : "s"} selected` : "All teams";
+			};
+			picker.querySelector(".team-visibility-search").addEventListener("input", event => {
+				const query = event.target.value.trim().toLowerCase();
+				picker.querySelectorAll(".team-visibility-option").forEach(option => {
+					option.style.display = !query || option.dataset.teamName.includes(query) ? "flex" : "none";
+				});
+			});
+			picker.addEventListener("change", update);
+			form.addEventListener("submit", () => {
+				update();
+			});
+		})();
+	</script>
+	{% endblock %}
+
+
+	{% block message %}
+	<div class="form-group">
+		<label>
+			Message:<br>
+			<small class="form-text text-muted">
+				Use this to give a brief introduction to your challenge.
+			</small>
+		</label>
+		<textarea id="new-desc-editor" class="form-control markdown" name="description" rows="10"></textarea>
+	</div>
+	{% endblock %}
+
+	{% block attribution %}
+	{% endblock %}
+
+	{% block value %}
+	<div class="form-group">
+		<label>
+			Value:<br>
+			<small class="form-text text-muted">
+				This is how many points are rewarded for solving this challenge.
+			</small>
+		</label>
+		<input type="number" class="form-control" name="value" placeholder="Enter value" required>
+	</div>
+	{% endblock %}
+
+	{% block state %}
+	<input type="hidden" name="state" value="hidden">
+	{% endblock %}
+
+	{% block type %}
+	<input type="hidden" name="type" value="standard">
+	{% endblock %}
+
+	{% block submit %}
+	<div class="form-group">
+		<button class="btn btn-primary float-right create-challenge-submit" type="submit">Create</button>
+	</div>
+	{% endblock %}
+</form>
+
+{% block footer %}
+{% endblock %}

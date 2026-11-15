@@ -1,0 +1,248 @@
+{% block header %}
+{% endblock %}
+
+<form method="POST">
+	{% block name %}
+	<div class="form-group">
+		<label>
+			Name<br>
+			<small class="form-text text-muted">Challenge Name</small>
+		</label>
+		<input type="text" class="form-control chal-name" name="name" value="{{ challenge.name }}">
+	</div>
+	{% endblock %}
+
+	{% block category %}
+	<div class="form-group">
+		<label>
+			Category<br>
+			<small class="form-text text-muted">Challenge Category</small>
+		</label>
+		<input type="text" class="form-control chal-category" name="category" value="{{ challenge.category }}">
+	</div>
+	{% endblock %}
+
+	{% block competition_mode %}
+	<div class="form-group">
+		<label>
+			Challenge Set<br>
+			<small class="form-text text-muted">
+				Jeopardy challenges appear on the standard board. 1v1 challenges are reserved for the spin wheel.
+			</small>
+		</label>
+		<select class="form-control custom-select" name="competition_mode">
+			<option value="jeopardy" {% if challenge.competition_mode == "jeopardy" %}selected{% endif %}>Standard Jeopardy</option>
+			<option value="onevone" {% if challenge.competition_mode == "onevone" %}selected{% endif %}>1v1 qualifier</option>
+			<option value="onevone_tiebreaker" {% if challenge.competition_mode == "onevone_tiebreaker" %}selected{% endif %}>1v1 tiebreaker</option>
+			<option value="onevone_grand_final" {% if challenge.competition_mode == "onevone_grand_final" %}selected{% endif %}>1v1 grand final</option>
+		</select>
+	</div>
+	{% endblock %}
+
+	{% block team_visibility %}
+	<div class="form-group">
+		<label for="team-visibility-picker">Team visibility</label>
+		<small class="form-text text-muted mb-2">Leave empty to show this challenge to all teams. Select teams to restrict it.</small>
+		<div class="dropdown" id="team-visibility-picker">
+			<button class="btn btn-outline-secondary dropdown-toggle w-100 text-left" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+				<span class="team-visibility-label">{% if visibility_team_ids %}{{ visibility_team_ids|length }} team{% if visibility_team_ids|length != 1 %}s{% endif %} selected{% else %}All teams{% endif %}</span>
+			</button>
+			<div class="dropdown-menu w-100 p-2" style="max-height: 320px; overflow-y: auto;">
+				<input type="search" class="form-control form-control-sm mb-2 team-visibility-search" placeholder="Search teams..." autocomplete="off">
+				<div class="team-visibility-options">
+					{% for team in teams or [] %}
+					<label class="dropdown-item d-flex align-items-center team-visibility-option mb-0" data-team-name="{{ team.name|lower }}">
+						<input type="checkbox" class="mr-2 team-visibility-checkbox" value="{{ team.id }}" {% if team.id in (visibility_team_ids or []) %}checked{% endif %}>
+						<span>{{ team.name }}</span>
+					</label>
+					{% endfor %}
+				</div>
+			</div>
+		</div>
+		<input type="hidden" id="team-visibility" name="team_visibility" value="{{ (visibility_team_ids or []) | tojson }}">
+	</div>
+	<script>
+		(() => {
+			const form = document.getElementById("team-visibility-picker").closest("form");
+			const picker = document.getElementById("team-visibility-picker");
+			const output = document.getElementById("team-visibility");
+			const label = picker.querySelector(".team-visibility-label");
+			const checkboxes = () => [...picker.querySelectorAll(".team-visibility-checkbox")];
+			const update = () => {
+				const selected = checkboxes().filter(input => input.checked);
+				output.value = JSON.stringify(selected.map(input => Number(input.value)));
+				label.textContent = selected.length ? `${selected.length} team${selected.length === 1 ? "" : "s"} selected` : "All teams";
+			};
+			picker.querySelector(".team-visibility-search").addEventListener("input", event => {
+				const query = event.target.value.trim().toLowerCase();
+				picker.querySelectorAll(".team-visibility-option").forEach(option => {
+					option.style.display = !query || option.dataset.teamName.includes(query) ? "flex" : "none";
+				});
+			});
+			picker.addEventListener("change", update);
+			form.addEventListener("submit", () => {
+				update();
+			});
+		})();
+	</script>
+	{% endblock %}
+
+	{% block message %}
+	<div class="form-group">
+		<label>
+			Message<br>
+			<small class="form-text text-muted">
+				Use this to give a brief introduction to your challenge.
+			</small>
+		</label>
+		<textarea id="desc-editor" class="form-control chal-desc-editor markdown" name="description" rows="10">{{ challenge.description }}</textarea>
+	</div>
+	{% endblock %}
+
+	{% block attribution %}
+	<div class="form-group">
+		<label>
+			Attribution:<br>
+			<small class="form-text text-muted">
+				Attribution for your challenge <small>(supports markdown)</small>
+			</small>
+		</label>
+		<input type="text" class="form-control" name="attribution" value="{{ challenge.attribution }}">
+	</div>
+	{% endblock %}
+
+	{% block connection_info %}
+	<div class="form-group">
+		<label>
+			Connection Info<br>
+			<small class="form-text text-muted">
+				Use this to specify a link, hostname, or connection instructions for your challenge.
+			</small>
+		</label>
+		<input type="text" class="form-control chal-connection-info" name="connection_info" value="{{ challenge.connection_info | default('', true) }}">
+	</div>
+	{% endblock %}
+
+	{% block value %}
+	<div class="form-group">
+		<label for="value">
+			Value<br>
+			<small class="form-text text-muted">
+				This is how many points teams will receive once they solve this challenge.
+			</small>
+		</label>
+		<input type="number" class="form-control chal-value" name="value" value="{{ challenge.value }}" required>
+	</div>
+	{% endblock %}
+
+	{% block function %}
+	<div class="form-group">
+		<label for="function">
+			Scoring Function<br>
+			<small class="form-text text-muted">
+				<span>How the challenge value will be calculated based on the Decay value</span>
+			</small>
+		</label>
+		<select name="function" class="custom-select chal-function">
+			<option value="static" {% if challenge.function == "static" %}selected{% endif %}>Static</option>
+			<option value="linear" {% if challenge.function == "linear" %}selected{% endif %}>Linear</option>
+			<option value="logarithmic" {% if challenge.function == "logarithmic" %}selected{% endif %}>Logarithmic</option>
+		</select>
+		<small class="form-text text-muted">
+			<ul>
+				<li>Static: Challenge <code>Value</code> is awarded as-is</li>
+				<li>Linear: Calculated as <code>Initial - (Decay * SolveCount)</code></li>
+				<li>Logarithmic: Calculated as <code>(((Minimum - Initial) / (Decay^2)) * (SolveCount^2)) + Initial</code></li>
+			</ul>
+		</small>
+	</div>
+	{% endblock %}
+
+	{% block initial %}
+	<div class="form-group">
+		<label for="initial">Initial Value<br>
+			<small class="form-text text-muted">
+				This is how many points the challenge was worth initially.
+			</small>
+		</label>
+		<input type="number" class="form-control chal-initial" name="initial" value="{{ challenge.initial }}" required>
+	</div>
+	{% endblock %}
+
+	{% block decay %}
+	<div class="form-group">
+		<label for="decay">Decay<br>
+			<small class="form-text text-muted">
+				<span>The decay value is used differently depending on the above Decay Function</span>
+				<ul>
+					<li>Linear: The amount of points deducted per solve. Equal deduction per solve.</li>
+					<li>Logarithmic: The amount of solves before the challenge reaches its minimum value. Earlier solves will lose less points. Later solves will lose more points</li>
+				</ul>
+			</small>
+		</label>
+		<input type="number" class="form-control chal-decay" min="1" name="decay" value="{{ challenge.decay }}" required>
+	</div>
+	{% endblock %}
+
+	{% block minimum %}
+	<div class="form-group">
+		<label for="minimum">Minimum Value<br>
+			<small class="form-text text-muted">
+				This is the lowest that the challenge can be worth
+			</small>
+		</label>
+		<input type="number" class="form-control chal-minimum" name="minimum" value="{{ challenge.minimum }}" required>
+	</div>
+	{% endblock %}
+
+	{% block logic %}
+	<div class="form-group">
+		<label>
+			Logic<br>
+			<small class="form-text text-muted">Determines how this challenge is solved</small>
+		</label>
+
+		<select class="form-control custom-select" name="logic">
+			<option value="any" {% if challenge.logic == "any" or not challenge.logic %}selected{% endif %}>Require Any Flag</option>
+			<option value="all" {% if challenge.logic == "all" %}selected{% endif %}>Require All Flags</option>
+			<option value="team" {% if challenge.logic == "team" %}selected{% endif %}>Require Any Flags by All Team Members</option>
+		</select>
+	</div>
+	{% endblock %}
+
+	{% block max_attempts %}
+	<div class="form-group">
+		<label>
+			Max Attempts<br>
+			<small class="form-text text-muted">Maximum amount of attempts users receive. Leave at 0 for unlimited.</small>
+		</label>
+
+		<input type="number" class="form-control chal-attempts" name="max_attempts" value="{{ challenge.max_attempts }}">
+	</div>
+	{% endblock %}
+
+	{% block state %}
+	<div class="form-group">
+		<label>
+			State<br>
+			<small class="form-text text-muted">Changes the state of the challenge (e.g. visible, hidden)</small>
+		</label>
+
+		<select class="form-control custom-select" name="state">
+			<option value="visible" {% if challenge.state == "visible" %}selected{% endif %}>Visible</option>
+			<option value="hidden" {% if challenge.state == "hidden" %}selected{% endif %}>Hidden</option>
+		</select>
+	</div>
+	{% endblock %}
+
+	{% block submit %}
+	<div>
+		<button class="btn btn-success btn-outlined float-right" type="submit">
+			Update
+		</button>
+	</div>
+	{% endblock %}
+</form>
+
+{% block footer %}
+{% endblock %}

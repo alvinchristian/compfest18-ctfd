@@ -1,0 +1,71 @@
+{% extends "challenge.html" %} 
+
+{% block scripts %}
+{{ super() }}
+<script>
+console.log("[Container INLINE] Script block executing");
+</script>
+{% endblock %}
+
+{% block connection_info %}
+<h6 class="fw-semibold mb-0">{% trans %}Connection Info{% endtrans %}</h6>
+<div class="deployment-actions mt-2" data-challenge-id="{{ challenge.id }}">
+  <div class="challenge-connection-box">
+    <div class="container-status" id="deployment-info">
+      <div class="d-flex align-items-center gap-2 text-muted">
+        <div class="spinner-border spinner-border-sm" role="status"></div>
+        <span>Loading instance status...</span>
+      </div>
+    </div>
+  </div>
+  <div class="container-actions d-flex align-items-stretch gap-2" style="white-space:nowrap">
+    <button
+      onclick="container_request({{ challenge.id }})"
+      class="btn btn-primary btn-sm auth-submit-button instance-launch-button d-none"
+      id="create-chal"
+    >
+      <span><i class="fas fa-play me-1"></i> Launch Instance</span>
+    </button>
+    <button
+      onclick="container_renew({{ challenge.id }})"
+      class="btn btn-sm instance-extend-button d-none"
+      id="extend-chal"
+    >
+      <span><i class="fas fa-clock me-1"></i> Extend</span>
+    </button>
+    <button
+      onclick="container_stop({{ challenge.id }})"
+      class="btn btn-outline-danger btn-sm d-none px-0"
+      style="aspect-ratio:1"
+      id="terminate-chal"
+    >
+      <i class="fas fa-stop"></i>
+    </button>
+    <button
+      onclick="container_cancel_queue()"
+      class="btn btn-danger btn-sm d-none"
+      id="exit-queue"
+    >
+      <i class="fas fa-sign-out-alt me-1"></i> Exit from queue
+    </button>
+  </div>
+</div>
+<script>
+console.log("[Container INLINE] connection_info block script executing");
+console.log("[Container INLINE] Challenge ID: {{ challenge.id }}");
+if (typeof view_container_info === 'function') {
+    console.log("[Container INLINE] Calling view_container_info");
+    view_container_info({{ challenge.id }});
+} else {
+    console.log("[Container INLINE] view_container_info not defined yet, setting timeout");
+    setTimeout(function() {
+        if (typeof view_container_info === 'function') {
+            console.log("[Container INLINE] Calling view_container_info after timeout");
+            view_container_info({{ challenge.id }});
+        } else {
+            console.error("[Container INLINE] view_container_info still not defined!");
+        }
+    }, 500);
+}
+</script>
+{% endblock %}

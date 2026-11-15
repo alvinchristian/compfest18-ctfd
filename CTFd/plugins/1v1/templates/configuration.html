@@ -1,0 +1,166 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+  <div class="container">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1 class="mb-2">1v1 Spin Wheel</h1>
+        <p class="lead mb-0">Choose which challenge categories can appear on the admin wheel.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div class="onevone-admin-layout">
+    {% include "plugins/1v1/templates/admin_navigation.html" %}
+    <main class="onevone-admin-content">
+  {% if saved %}
+    <div class="alert alert-success" role="alert">
+      <i class="fas fa-check-circle mr-1"></i> Wheel categories saved.
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header"><strong><i class="fas fa-power-off mr-1"></i> Plugin status</strong></div>
+    <div class="card-body d-flex align-items-center justify-content-between">
+      <div>
+        <strong class="{% if enabled %}text-success{% else %}text-muted{% endif %}">{{ 'Enabled' if enabled else 'Disabled' }}</strong>
+        <div class="text-muted small">Disabling hides the public bracket and draft page, and pauses all 1v1 wheel and scoring actions.</div>
+      </div>
+      <form method="POST">
+        <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+        <input type="hidden" name="action" value="toggle">
+        <input type="hidden" name="enabled" value="{{ 'false' if enabled else 'true' }}">
+        <button class="btn {% if enabled %}btn-outline-danger{% else %}btn-success{% endif %}" type="submit">
+          <i class="fas {% if enabled %}fa-toggle-off{% else %}fa-toggle-on{% endif %} mr-1"></i>{{ 'Disable plugin' if enabled else 'Enable plugin' }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% if admin_match and admin_game %}
+    <div class="card shadow-sm mb-4 border-primary">
+      <div class="card-header"><strong><i class="fas fa-gamepad mr-1"></i> Current game</strong></div>
+      <div class="card-body d-flex flex-wrap align-items-center justify-content-between">
+        <div>
+          <strong>Match {{ admin_match.sequence }} · Game {{ admin_game.game_number }}</strong>
+          {% if admin_game.paused %}<span class="badge badge-warning ml-2">Paused</span>{% endif %}
+          <div class="text-muted small">{{ admin_match.team_one_entry.team.name }} vs {{ admin_match.team_two_entry.team.name }}</div>
+        </div>
+        <div class="mt-2 mt-md-0">
+          {% if not admin_game.started_at and not admin_game.is_tiebreaker %}
+            <form class="d-inline" method="POST" action="{{ url_for('onevone.start_game') }}">
+              <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+              <button class="btn btn-primary" type="submit"><i class="fas fa-play mr-1"></i> Start 20-minute game</button>
+            </form>
+          {% endif %}
+          <a class="btn btn-outline-primary ml-1" href="{{ url_for('onevone.bracket_configuration') }}">Open bracket controls</a>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header"><strong><i class="fas fa-clock mr-1"></i> Match duration</strong></div>
+    <div class="card-body">
+      <p class="text-muted">Set the default time limit for each normal game. The default is 20 minutes; changes apply when the next game is started.</p>
+      {% if duration_error %}<div class="alert alert-danger">{{ duration_error }}</div>{% endif %}
+      <form method="POST" class="form-inline">
+        <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+        <input type="hidden" name="action" value="match_duration">
+        <label class="mr-2" for="match-duration">Minutes</label>
+        <input class="form-control mr-2" id="match-duration" name="minutes" type="number" min="1" max="180" value="{{ match_duration_minutes }}" required>
+        <button class="btn btn-primary" type="submit"><i class="fas fa-save mr-1"></i> Save duration</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header">
+      <strong><i class="fas fa-list mr-1"></i> Wheel categories</strong>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">These are the <strong>1v1 qualifier</strong> categories. Every game needs at least three unused categories with unshown challenges so both teams can ban once and leave a category on the wheel.</p>
+
+      {% if available_categories %}
+        <form method="POST">
+          <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+          <input type="hidden" name="action" value="normal_categories">
+          <div class="form-group">
+            <label for="wheel-categories">Available categories</label>
+            <select class="form-control" id="wheel-categories" name="categories" multiple size="{{ [available_categories|length, 10]|min }}" aria-describedby="wheel-categories-help">
+              {% for category in available_categories %}
+                <option value="{{ category }}" {% if category in configured_categories %}selected{% endif %}>{{ category }}</option>
+              {% endfor %}
+            </select>
+            <small id="wheel-categories-help" class="form-text text-muted">Use Ctrl/Cmd-click to select multiple categories. A revealed challenge is remembered permanently, even if somebody hides it later.</small>
+          </div>
+          <button class="btn btn-primary" type="submit">
+            <i class="fas fa-save mr-1"></i> Save wheel
+          </button>
+          {% if configured_categories %}
+            <span class="ml-2 text-muted">{{ configured_categories|length }} {{ 'category' if configured_categories|length == 1 else 'categories' }} selected</span>
+          {% endif %}
+        </form>
+      {% else %}
+        <div class="alert alert-info mb-0" role="alert">
+          <i class="fas fa-info-circle mr-1"></i> Add at least three categorized challenges to the 1v1 qualifier challenge set before configuring the wheel.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-4">
+    <div class="card-header"><strong><i class="fas fa-bolt mr-1"></i> Tiebreaker wheel categories</strong></div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+        <input type="hidden" name="action" value="tiebreaker_categories">
+      <p class="text-muted">Tiebreaker challenges use the separate <em>1v1 tiebreaker</em> challenge set. They skip draft pick and have no timer.</p>
+      {% if tiebreaker_available %}
+        <div class="form-group">
+          <label for="tiebreaker-categories">Available tiebreaker categories</label>
+          <select class="form-control" id="tiebreaker-categories" name="tiebreaker_categories" multiple size="{{ [tiebreaker_available|length, 10]|min }}">
+            {% for category in tiebreaker_available %}
+              <option value="{{ category }}" {% if category in tiebreaker_configured %}selected{% endif %}>{{ category }}</option>
+            {% endfor %}
+          </select>
+          <small class="form-text text-muted">Save these together with the normal wheel categories above.</small>
+        </div>
+      {% else %}
+        <div class="alert alert-info mb-0">Add categorized challenges to the 1v1 tiebreaker challenge set first.</div>
+      {% endif %}
+        <button class="btn btn-primary mt-3" type="submit"><i class="fas fa-save mr-1"></i> Save tiebreaker categories</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-4">
+    <div class="card-header"><strong><i class="fas fa-trophy mr-1"></i> Grand final wheel categories</strong></div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+        <input type="hidden" name="action" value="grand_final_categories">
+        <p class="text-muted">Grand Final matches use the separate <em>1v1 grand final</em> challenge set. Draft pick still applies, but these categories are never mixed with qualifier challenges.</p>
+        {% if grand_final_available %}
+          <div class="form-group">
+            <label for="grand-final-categories">Available grand final categories</label>
+            <select class="form-control" id="grand-final-categories" name="grand_final_categories" multiple size="{{ [grand_final_available|length, 10]|min }}">
+              {% for category in grand_final_available %}
+                <option value="{{ category }}" {% if category in grand_final_configured %}selected{% endif %}>{{ category }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit"><i class="fas fa-save mr-1"></i> Save grand final categories</button>
+        {% else %}
+          <div class="alert alert-info mb-0">Add categorized challenges to the 1v1 grand final challenge set first.</div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</main>
+  </div>
+</div>
+{% endblock %}

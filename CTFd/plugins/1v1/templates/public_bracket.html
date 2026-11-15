@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .onevone-bracket-page {
+    --bracket-blue: #2f80ed;
+    --bracket-blue-dark: #145dbf;
+    --bracket-blue-soft: #eaf3ff;
+    --bracket-line: #77aef5;
+    min-height: calc(100vh - 12rem);
+    padding: 3rem 0 4rem;
+  }
+  .onevone-bracket-scroll { overflow-x: auto; padding: .25rem .25rem 1.5rem; }
+  .onevone-bracket-board {
+    position: relative;
+    display: grid;
+    grid-auto-columns: 15rem;
+    grid-auto-flow: column;
+    gap: 4rem;
+    min-width: max-content;
+    min-height: 34rem;
+    padding: 0 .25rem;
+  }
+  .onevone-bracket-connectors {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .onevone-bracket-stage { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; }
+  .onevone-bracket-stage__title {
+    min-height: 3.5rem;
+    padding: .65rem .85rem;
+    border-radius: .35rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--bracket-blue), var(--bracket-blue-dark));
+    box-shadow: 0 .25rem .65rem rgba(20, 93, 191, .18);
+    font-size: .92rem;
+    font-weight: 700;
+  }
+  .onevone-bracket-stage__title small { display: block; margin-top: .1rem; color: rgba(255, 255, 255, .82); font-size: .7rem; font-weight: 400; }
+  .onevone-bracket-stage__matches { display: flex; flex: 1; flex-direction: column; justify-content: space-around; gap: 1.35rem; padding: 1.4rem 0; }
+  .onevone-bracket-match-wrap { position: relative; }
+  .onevone-bracket-match__meta { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .3rem; color: #62748a; font-size: .68rem; line-height: 1.2; }
+  .onevone-bracket-match__meta span:last-child { flex-shrink: 0; text-align: right; }
+  .onevone-bracket-match {
+    overflow: hidden;
+    border: 1px solid #bed7f7;
+    border-radius: .35rem;
+    background: var(--bs-body-bg, #fff);
+    box-shadow: 0 .2rem .55rem rgba(26, 79, 143, .12);
+  }
+  .onevone-bracket-team { display: grid; grid-template-columns: minmax(0, 1fr) 2.45rem; align-items: stretch; min-height: 2.35rem; }
+  .onevone-bracket-team + .onevone-bracket-team { border-top: 1px solid #d5e5f8; }
+  .onevone-bracket-team__name { overflow: hidden; padding: .55rem .65rem; font-size: .83rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .onevone-bracket-team__score { display: grid; place-items: center; border-left: 1px solid #d5e5f8; background: var(--bracket-blue-soft); color: var(--bracket-blue-dark); font-size: .88rem; font-weight: 800; }
+  .onevone-bracket-team--winner .onevone-bracket-team__score { border-left-color: var(--bracket-blue-dark); color: #fff; background: var(--bracket-blue); }
+  .onevone-bracket-team--pending .onevone-bracket-team__name { color: #7b8da3; font-size: .76rem; font-style: italic; font-weight: 400; }
+  .onevone-bracket-empty { max-width: 38rem; margin: 5rem auto; text-align: center; }
+  @media (prefers-color-scheme: dark) {
+    .onevone-bracket-match__meta { color: #a7b8cc; }
+    .onevone-bracket-match { border-color: rgba(119, 174, 245, .48); }
+    .onevone-bracket-team + .onevone-bracket-team, .onevone-bracket-team__score { border-color: rgba(119, 174, 245, .32); }
+    .onevone-bracket-team__score { background: rgba(47, 128, 237, .16); color: #8bbcf9; }
+  }
+  @media (max-width: 575px) {
+    .onevone-bracket-page { padding-top: 2rem; }
+    .onevone-bracket-board { grid-auto-columns: 14rem; gap: 3rem; }
+  }
+</style>
+
+<div class="onevone-bracket-page">
+  <div class="container-fluid px-3 px-lg-4">
+    <div class="text-center mb-4">
+      <h1 class="h2 mb-2">1v1 Tournament Bracket</h1>
+      {% if bracket %}
+        <p class="text-muted mb-0">{{ bracket.entries|length }} teams · placements through {{ bracket.winner_count }} winner{{ '' if bracket.winner_count == 1 else 's' }}</p>
+      {% endif %}
+    </div>
+
+    {% if bracket %}
+      <div class="onevone-bracket-scroll">
+        <div class="onevone-bracket-board" id="onevone-bracket-board" aria-label="Tournament bracket">
+          <svg class="onevone-bracket-connectors" id="onevone-bracket-connectors" aria-hidden="true"></svg>
+          {% for stage_view in stages %}
+            <section class="onevone-bracket-stage">
+              <div class="onevone-bracket-stage__title">
+                {{ stage_view.stage.title }}
+                <small>Stage BO{{ stage_view.stage.best_of }} · {{ stage_view.matches|length }} match{{ '' if stage_view.matches|length == 1 else 'es' }}</small>
+              </div>
+              <div class="onevone-bracket-stage__matches">
+                {% for match_view in stage_view.matches %}
+                  {% set pending_one = match_view.team_one.startswith('Winner') or match_view.team_one.startswith('Loser') or match_view.team_one == 'To be determined' %}
+                  {% set pending_two = match_view.team_two.startswith('Winner') or match_view.team_two.startswith('Loser') or match_view.team_two == 'To be determined' %}
+                  <div
+                    class="onevone-bracket-match-wrap"
+                    data-match-id="{{ match_view.match.id }}"
+                    data-source-one="{{ match_view.match.team_one_source_match_id or '' }}"
+                    data-source-two="{{ match_view.match.team_two_source_match_id or '' }}"
+                  >
+                    <div class="onevone-bracket-match__meta">
+                      <span>Match {{ match_view.match.sequence }} · {{ match_view.match.label }}</span>
+                      <span>BO{{ match_view.match.effective_best_of }} · {{ match_view.match.status|capitalize }}</span>
+                    </div>
+                    <article class="onevone-bracket-match">
+                      <div class="onevone-bracket-team {% if pending_one %}onevone-bracket-team--pending{% endif %} {% if match_view.match.winner_entry_id and match_view.match.winner_entry_id == match_view.match.team_one_entry_id %}onevone-bracket-team--winner{% endif %}">
+                        <span class="onevone-bracket-team__name" title="{{ match_view.team_one }}">{{ match_view.team_one }}</span>
+                        <span class="onevone-bracket-team__score">{{ match_view.match.team_one_score }}</span>
+                      </div>
+                      <div class="onevone-bracket-team {% if pending_two %}onevone-bracket-team--pending{% endif %} {% if match_view.match.winner_entry_id and match_view.match.winner_entry_id == match_view.match.team_two_entry_id %}onevone-bracket-team--winner{% endif %}">
+                        <span class="onevone-bracket-team__name" title="{{ match_view.team_two }}">{{ match_view.team_two }}</span>
+                        <span class="onevone-bracket-team__score">{{ match_view.match.team_two_score }}</span>
+                      </div>
+                    </article>
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="onevone-bracket-empty card shadow-sm">
+        <div class="card-body p-5">
+          <i class="fas fa-sitemap fa-3x text-muted mb-3"></i>
+          <h2 class="h4">Bracket coming soon</h2>
+          <p class="text-muted mb-0">The tournament bracket has not been generated yet.</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if bracket %}
+<script>
+  (() => {
+    const board = document.getElementById("onevone-bracket-board");
+    const svg = document.getElementById("onevone-bracket-connectors");
+    if (!board || !svg) return;
+
+    const drawConnectors = () => {
+      const boardRect = board.getBoundingClientRect();
+      svg.replaceChildren();
+      svg.setAttribute("viewBox", `0 0 ${board.scrollWidth} ${board.scrollHeight}`);
+
+      board.querySelectorAll(".onevone-bracket-match-wrap").forEach((target) => {
+        [target.dataset.sourceOne, target.dataset.sourceTwo].filter(Boolean).forEach((sourceId) => {
+          const source = board.querySelector(`[data-match-id="${CSS.escape(sourceId)}"]`);
+          if (!source) return;
+
+          const sourceCard = source.querySelector(".onevone-bracket-match").getBoundingClientRect();
+          const targetCard = target.querySelector(".onevone-bracket-match").getBoundingClientRect();
+          const x1 = sourceCard.right - boardRect.left;
+          const y1 = sourceCard.top + sourceCard.height / 2 - boardRect.top;
+          const x2 = targetCard.left - boardRect.left;
+          const y2 = targetCard.top + targetCard.height / 2 - boardRect.top;
+          const middle = x1 + (x2 - x1) / 2;
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", `M ${x1} ${y1} H ${middle} V ${y2} H ${x2}`);
+          path.setAttribute("fill", "none");
+          path.setAttribute("stroke", "#77aef5");
+          path.setAttribute("stroke-width", "2");
+          path.setAttribute("vector-effect", "non-scaling-stroke");
+          svg.appendChild(path);
+        });
+      });
+    };
+
+    window.addEventListener("load", drawConnectors);
+    window.addEventListener("resize", drawConnectors);
+    if (window.ResizeObserver) new ResizeObserver(drawConnectors).observe(board);
+    requestAnimationFrame(drawConnectors);
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,8 @@
+# Development-only Compose override. Requires Docker Compose v2.24.4+ for
+# the !override tag. It replaces the TLS Nginx configuration with plain HTTP.
+services:
+  nginx:
+    volumes: !override
+      - ./conf/nginx/http.dev.conf:/etc/nginx/nginx.conf:ro
+    ports: !override
+      - "80:80"

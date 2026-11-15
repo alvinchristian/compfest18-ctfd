@@ -1,0 +1,36 @@
+/* Jumbotron styles
+-------------------------------------------------- */
+
+.jumbotron {
+  padding: 2rem 1rem;
+  margin-bottom: 2rem;
+  text-align: center;
+
+  color: var(--bs-dark);
+}
+
+.challenge-jumbotron {
+  padding: 2rem 1rem;
+  margin-bottom: 2rem;
+  text-align: start;
+
+  color: var(--bs-dark);
+}
+
+[data-bs-theme="dark"] .jumbotron,
+[data-bs-theme="dark"] .challenge-jumbotron {
+  background-color: var(--bs-dark);
+  color: var(--bs-light);
+}
+
+@media (min-width: 576px) {
+  .jumbotron {
+    padding: 4rem 2rem;
+  }
+  .challenge-jumbotron {
+    padding-top: 1rem;
+    padding-bottom: 0;
+    padding-right: 0;
+    padding-left: 0;
+  }
+}

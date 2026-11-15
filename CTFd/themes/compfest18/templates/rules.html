@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="jumbotron">
+        <div class="container">
+            <h1>{% trans %}Rules{% endtrans %}</h1>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <p>During the competition, each team is prohibited from:</p>
+                <ul>
+                <li>Collaborating with anyone outside the team in any form (flag sharing, cross teaming, etc).</li>
+                <li>Discuss/ask about challenges in the Discord server. If you have a question, please open a ticket.</li>
+                <li>Using LLMs or other automated methods to create multiple accounts for the purpose of submitting flags through those accounts.</li>
+                <li>Using automated scanners or tools such as SQLMap, Burp Scanner, Dirb, or similar tools (unless explicitly permitted in the challenge description).</li>
+                <li>Causing any form of harm or disruption to other participants or the organizers. Examples include:
+                    <ul>
+                    <li>Deleting or modifying flag files,</li>
+                    <li>Launching DDoS attacks against services or the competition platform,</li>
+                    <li>Brute-forcing flags on the platform,</li>
+                    <li>And other similar disruptive actions.</li>
+                    </ul>
+                </li>
+                <li>Engaging in flag hoarding (intentionally stockpiling flags and submitting them in bulk near the end of the competition).</li>
+                <li>Use agentic capabilities of LLMs or automated workflows to solve/help solve challenges. The only form of LLM usage that is allowed is web-based LLM. If you're using an LLM as more than a chatbot, it is probably not allowed.</li>
+                <li>Hints will be given only to challenges which have 0 solves. The organizer will notify when a hint is released, so please do not ask for hints in the Discord server, or anywhere else.</li>
+                </ul>
+                <p>Teams found to have violated these rules or engaged in cheating will be subject to penalties, including disqualification or point deductions.</p>
+                <p>Flag format for each challenge will be <code>COMPFEST18{[A-z0-9_-]+}</code> unless specified otherwise.</p>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -1,0 +1,26 @@
+/* @use "~/@fontsource/lato/scss/mixins" as Lato; */
+@use "~/@fontsource/poppins/scss/mixins" as Poppins;
+@use "~/@fontsource/raleway/scss/mixins" as Raleway;
+
+// Include both normal and bold weights
+@include Poppins.fontFace($fontDir: "../webfonts", $weight: 400);
+@include Poppins.fontFace($fontDir: "../webfonts", $weight: 500);
+@include Poppins.fontFace($fontDir: "../webfonts", $weight: 600);
+@include Poppins.fontFace($fontDir: "../webfonts", $weight: 700);
+
+@include Raleway.fontFace($fontDir: "../webfonts");
+
+$fa-font-path: "../webfonts";
+@import "~/@fortawesome/fontawesome-free/scss/fontawesome.scss";
+@import "~/@fortawesome/fontawesome-free/scss/solid.scss";
+@import "~/@fortawesome/fontawesome-free/scss/brands.scss";
+
+html,
+body,
+.container {
+  font-family: "Poppins", sans-serif;
+}
+
+.jumbotron .container {
+  font-family: "Poppins", sans-serif;
+}

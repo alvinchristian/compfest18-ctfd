@@ -1,0 +1,298 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+  <div class="container">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1 class="mb-2">1v1 Bracket</h1>
+        <p class="lead mb-0">Set team seeds and generate the public tournament bracket.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container pb-5">
+  <div class="onevone-admin-layout">
+    {% include "plugins/1v1/templates/admin_navigation.html" %}
+    <main class="onevone-admin-content">
+  {% if generated %}
+    <div class="alert alert-success" role="alert">
+      <i class="fas fa-check-circle mr-1"></i> Bracket generated. The public bracket is now updated.
+    </div>
+  {% endif %}
+  {% if error %}
+    <div class="alert alert-danger" role="alert">
+      <i class="fas fa-exclamation-circle mr-1"></i> {{ error }}
+    </div>
+  {% endif %}
+  {% if notice %}
+    <div class="alert alert-info" role="alert"><i class="fas fa-info-circle mr-1"></i> {{ notice }}</div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header"><strong><i class="fas fa-sitemap mr-1"></i> Generate bracket</strong></div>
+    <div class="card-body">
+      <p class="text-muted">The first team is seed #1. Teams are paired in standard seeded order, and the highest seeds receive any required first-stage byes.</p>
+      <form method="POST" id="bracket-form">
+        <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+        <div class="row">
+          <div class="col-lg-5">
+            <div class="form-group">
+              <label for="available-teams">Available teams</label>
+              <select id="available-teams" class="form-control" size="10">
+                {% for team in teams if team.id not in selected_team_ids %}
+                  <option value="{{ team.id }}">{{ team.name }}{% if team.id %} · #{{ team.id }}{% endif %}</option>
+                {% endfor %}
+              </select>
+              <small class="form-text text-muted">Only visible, non-banned teams are shown.</small>
+            </div>
+            <button class="btn btn-outline-primary" type="button" id="add-team">
+              <i class="fas fa-plus mr-1"></i> Add selected team
+            </button>
+          </div>
+          <div class="col-lg-7 mt-4 mt-lg-0">
+            <label>Seed order</label>
+            <div id="selected-teams" class="list-group mb-2" aria-live="polite">
+              {% for team_id in selected_team_ids %}
+                {% set team = teams|selectattr('id', 'equalto', team_id)|first %}
+                {% if team %}
+                  <div class="list-group-item d-flex align-items-center" data-team-id="{{ team.id }}" data-team-name="{{ team.name }}">
+                    <span class="seed-number badge badge-primary badge-pill mr-3">#{{ loop.index }}</span>
+                    <span class="team-name flex-grow-1">{{ team.name }}</span>
+                    <button class="btn btn-sm btn-light move-up" type="button" aria-label="Move {{ team.name }} up"><i class="fas fa-chevron-up"></i></button>
+                    <button class="btn btn-sm btn-light ml-1 move-down" type="button" aria-label="Move {{ team.name }} down"><i class="fas fa-chevron-down"></i></button>
+                    <button class="btn btn-sm btn-outline-danger ml-2 remove-team" type="button" aria-label="Remove {{ team.name }}"><i class="fas fa-times"></i></button>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <p id="no-teams" class="text-muted {% if selected_team_ids %}d-none{% endif %}">Add at least two teams, then arrange their seed order.</p>
+          </div>
+        </div>
+        <div class="form-row align-items-end mt-3">
+          <div class="form-group col-md-4 mb-md-0">
+            <label for="winner-count">Number of winners</label>
+            <input class="form-control" id="winner-count" name="winner_count" type="number" min="1" value="{{ winner_count }}" required>
+            <small class="form-text text-muted">Generate placement matches through this final rank.</small>
+          </div>
+          <div class="col-md-8 mt-3 mt-md-0">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-magic mr-1"></i> Generate bracket</button>
+            {% if bracket %}<span class="ml-2 text-muted">Generating again replaces the current bracket.</span>{% endif %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if bracket %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header"><strong><i class="fas fa-gamepad mr-1"></i> Match control</strong></div>
+      <div class="card-body">
+        {% if active_match %}
+          <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+            <div>
+              <h2 class="h5 mb-1">Match {{ active_match.sequence }} · {{ active_match.label }}</h2>
+              <p class="text-muted mb-0">Best of {{ active_match.effective_best_of }} · {{ active_match.team_one_entry.team.name }} {{ active_match.team_one_score }} — {{ active_match.team_two_score }} {{ active_match.team_two_entry.team.name }}</p>
+            </div>
+            <div class="mt-3 mt-md-0">
+              {% if active_draft and active_draft.status == 'active' %}
+                <a class="btn btn-primary" href="{{ url_for('onevone.draft_pick') }}"><i class="fas fa-ban mr-1"></i> Watch Game {{ active_draft.game_number }} draft</a>
+              {% elif active_game and not active_game.started_at and not active_game.is_tiebreaker %}
+                <form class="d-inline" method="POST" action="{{ url_for('onevone.start_game') }}">
+                  <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+                  <button class="btn btn-primary" type="submit"><i class="fas fa-play mr-1"></i> Start {{ match_duration_minutes }}-minute game</button>
+                </form>
+              {% elif active_game %}
+                <a class="btn btn-outline-primary" href="{{ url_for('onevone.draft_pick') }}"><i class="fas fa-dharmachakra mr-1"></i> View Game {{ active_game.game_number }}{% if active_game.is_tiebreaker %} tiebreaker{% else %} wheel{% endif %}</a>
+              {% else %}
+                <form class="d-inline" method="POST" action="{{ url_for('onevone.next_game') }}">
+                  <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+                  <button class="btn btn-primary" type="submit"><i class="fas fa-forward mr-1"></i> Next game</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          <div class="row">
+            {% for slot, entry, score in [('one', active_match.team_one_entry, active_match.team_one_score), ('two', active_match.team_two_entry, active_match.team_two_score)] %}
+              <div class="col-md-6 mb-2 mb-md-0">
+                <div class="border rounded p-3 d-flex justify-content-between align-items-center">
+                  <strong>{{ entry.team.name }} <span class="badge badge-primary ml-1">{{ score }}</span></strong>
+                  <div>
+                    <form class="d-inline" method="POST" action="{{ url_for('onevone.score_adjustment') }}">
+                      <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="team_slot" value="{{ slot }}"><input type="hidden" name="delta" value="-1">
+                      <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="Remove a point from {{ entry.team.name }}">−</button>
+                    </form>
+                    <form class="d-inline" method="POST" action="{{ url_for('onevone.score_adjustment') }}">
+                      <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="team_slot" value="{{ slot }}"><input type="hidden" name="delta" value="1">
+                      <button class="btn btn-sm btn-outline-primary" type="submit" aria-label="Add a point to {{ entry.team.name }}">+</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% if active_game %}
+            <div class="alert {% if active_game.is_tiebreaker %}alert-warning{% else %}alert-info{% endif %} mt-3 mb-0">
+              {% if active_game.is_tiebreaker %}
+                <strong>Tiebreaker in progress:</strong> no time limit; the first solve wins the round.
+              {% elif active_game.started_at %}
+                <strong>Game timer running:</strong> {{ active_game.deadline }} UTC deadline. If unsolved, both teams receive 0; a tiebreaker is only used when the full series ends tied.
+              {% else %}
+                <strong>Challenge revealed:</strong> timer is set to {{ match_duration_minutes }} minutes; start it when both teams are ready.
+              {% endif %}
+            </div>
+            {% if not active_game.is_tiebreaker %}
+              <div class="border rounded p-3 mt-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between">
+                  <strong><i class="fas fa-stopwatch mr-1"></i> Game controls</strong>
+                  <div class="mt-2 mt-md-0">
+                    {% if active_game.paused %}
+                      <span class="badge badge-warning mr-2">Paused · {{ active_game.paused_remaining_seconds or 0 }} seconds remaining</span>
+                      <form class="d-inline" method="POST" action="{{ url_for('onevone.game_control') }}">
+                        <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="game_action" value="resume">
+                        <button class="btn btn-sm btn-primary" type="submit"><i class="fas fa-play mr-1"></i> Resume</button>
+                      </form>
+                    {% elif active_game.started_at %}
+                      <form class="d-inline" method="POST" action="{{ url_for('onevone.game_control') }}">
+                        <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="game_action" value="pause">
+                        <button class="btn btn-sm btn-outline-primary" type="submit"><i class="fas fa-pause mr-1"></i> Pause</button>
+                      </form>
+                    {% endif %}
+                    {% if active_game.started_at %}
+                      <form class="d-inline ml-1" method="POST" action="{{ url_for('onevone.game_control') }}">
+                        <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="game_action" value="add_time">
+                        <div class="input-group input-group-sm d-inline-flex align-middle" style="width: 145px">
+                          <input class="form-control" type="number" name="minutes" min="-120" max="120" placeholder="± minutes" required>
+                          <div class="input-group-append"><button class="btn btn-outline-primary" type="submit">Adjust</button></div>
+                        </div>
+                        <small class="form-text text-muted">Use positive values to add time or negative values to reduce it.</small>
+                      </form>
+                      <form class="d-inline ml-1" method="POST" action="{{ url_for('onevone.game_control') }}" onsubmit="return confirm('End this game and start the tiebreaker?');">
+                        <input type="hidden" name="nonce" value="{{ Session.nonce }}"><input type="hidden" name="game_action" value="end">
+                        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="fas fa-stop mr-1"></i> End game</button>
+                      </form>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          {% endif %}
+        {% else %}
+          <p class="text-muted">No match is active. Start the next eligible match only after the prior stage is complete.</p>
+          <form method="POST" action="{{ url_for('onevone.next_match') }}">
+            <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-play mr-1"></i> Start next match</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header"><strong><i class="fas fa-sliders-h mr-1"></i> Series settings</strong></div>
+      <div class="card-body p-0">
+        {% for stage_view in stage_views %}
+          <div class="p-3 {% if not loop.last %}border-bottom{% endif %}">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+              <strong>{{ stage_view.stage.title }}</strong>
+              <form class="form-inline mt-2 mt-sm-0" method="POST" action="{{ url_for('onevone.stage_best_of', stage_id=stage_view.stage.id) }}">
+                <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+                <label class="mr-2" for="stage-bo-{{ stage_view.stage.id }}">Stage best of</label>
+                <input class="form-control form-control-sm mr-2" id="stage-bo-{{ stage_view.stage.id }}" name="best_of" type="number" min="1" step="2" value="{{ stage_view.stage.best_of }}" required>
+                <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+              </form>
+            </div>
+            {% for match_view in stage_view.matches %}
+              <div class="d-flex flex-wrap align-items-center justify-content-between border rounded p-2 mb-2">
+                <span><strong>Match {{ match_view.match.sequence }}</strong> · {{ match_view.team_one }} vs {{ match_view.team_two }}</span>
+                <form class="form-inline mt-2 mt-sm-0" method="POST" action="{{ url_for('onevone.match_best_of', match_id=match_view.match.id) }}">
+                  <input type="hidden" name="nonce" value="{{ Session.nonce }}">
+                  <label class="mr-2" for="match-bo-{{ match_view.match.id }}">Override BO</label>
+                  <input class="form-control form-control-sm mr-2" id="match-bo-{{ match_view.match.id }}" name="best_of" type="number" min="1" step="2" value="{{ match_view.match.best_of or '' }}" placeholder="Stage default">
+                  <button class="btn btn-sm btn-outline-secondary" type="submit">Save</button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-clipboard-list mr-1"></i> Current bracket</strong>
+        <span class="badge badge-secondary">{{ bracket.entries|length }} teams · top {{ bracket.winner_count }}</span>
+      </div>
+      <div class="card-body">
+        <p class="mb-0 text-muted">Generated {{ bracket.created_at.strftime('%Y-%m-%d %H:%M UTC') }}. Match winners advance automatically when their series is decided.</p>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(() => {
+  const available = document.getElementById("available-teams");
+  const selected = document.getElementById("selected-teams");
+  const empty = document.getElementById("no-teams");
+  const form = document.getElementById("bracket-form");
+
+  function update() {
+    const rows = [...selected.querySelectorAll("[data-team-id]")];
+    rows.forEach((row, index) => row.querySelector(".seed-number").textContent = `#${index + 1}`);
+    empty.classList.toggle("d-none", rows.length > 0);
+  }
+
+  function addTeam(id, name) {
+    if (selected.querySelector(`[data-team-id="${CSS.escape(id)}"]`)) return;
+    const row = document.createElement("div");
+    row.className = "list-group-item d-flex align-items-center";
+    row.dataset.teamId = id;
+    row.dataset.teamName = name;
+    row.innerHTML = `<span class="seed-number badge badge-primary badge-pill mr-3"></span><span class="team-name flex-grow-1"></span><button class="btn btn-sm btn-light move-up" type="button" aria-label="Move up"><i class="fas fa-chevron-up"></i></button><button class="btn btn-sm btn-light ml-1 move-down" type="button" aria-label="Move down"><i class="fas fa-chevron-down"></i></button><button class="btn btn-sm btn-outline-danger ml-2 remove-team" type="button" aria-label="Remove"><i class="fas fa-times"></i></button>`;
+    row.querySelector(".team-name").textContent = name;
+    selected.append(row);
+    [...available.options].find(option => option.value === id)?.remove();
+    update();
+  }
+
+  document.getElementById("add-team").addEventListener("click", () => {
+    const option = available.options[available.selectedIndex];
+    if (option) addTeam(option.value, option.text);
+  });
+  available.addEventListener("dblclick", () => document.getElementById("add-team").click());
+
+  selected.addEventListener("click", event => {
+    const row = event.target.closest("[data-team-id]");
+    if (!row) return;
+    if (event.target.closest(".move-up") && row.previousElementSibling) selected.insertBefore(row, row.previousElementSibling);
+    if (event.target.closest(".move-down") && row.nextElementSibling) selected.insertBefore(row.nextElementSibling, row);
+    if (event.target.closest(".remove-team")) {
+      const option = new Option(row.dataset.teamName, row.dataset.teamId);
+      available.add(option);
+      [...available.options].sort((a, b) => a.text.localeCompare(b.text)).forEach(option => available.add(option));
+      row.remove();
+    }
+    update();
+  });
+
+  form.addEventListener("submit", () => {
+    selected.querySelectorAll("input[name='team_ids']").forEach(input => input.remove());
+    [...selected.querySelectorAll("[data-team-id]")].forEach(row => {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "team_ids";
+      input.value = row.dataset.teamId;
+      form.append(input);
+    });
+  });
+  update();
+})();
+</script>
+    </main>
+  </div>
+</div>
+{% endblock %}

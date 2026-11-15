@@ -1,0 +1,399 @@
+<div class="modal-dialog modal-xl" role="document" x-data="Challenge" x-init='id = {{ challenge.id }}; max_attempts = {{ max_attempts }}; attempts = {{ attempts }}; ratingValue = {{ (rating.get("value") if rating else None) | tojson }}; ratingReview = {{ (rating.get("review", "") if rating else None) | tojson }}; loadSolves();'>
+  <div class="modal-content">
+    <div class="modal-body p-0">
+      <button type="button" class="btn-close position-absolute top-0 end-0 mt-3 me-3" style="z-index:1" data-bs-dismiss="modal" aria-label="Close"></button>
+      <div class="challenge-modal-layout">
+        <div class="challenge-main-col">
+
+          <div class="challenge-header">
+            <div class="challenge-header-left">
+              <h2 class="challenge-name mb-1">
+                {{ challenge.name }}
+              </h2>
+
+              {% block attribution %}
+              {% if challenge.byline %}
+              <small class="challenge-attribution text-muted d-block mb-0">
+                {{ challenge.byline }}
+              </small>
+              {% endif %}
+              {% endblock %}
+            </div>
+            <div class="challenge-header-right">
+              <span class="challenge-value">{{ challenge.value }}</span>
+              <small>points</small>
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              {% if Configs.challenge_ratings == "public" %}
+              <small class="challenge-ratings text-muted">
+                {% block ratings %}
+                  {% if ratings %}
+                    <span><i class="fa-solid fa-thumbs-up"></i> {{ ratings.up }}</span>
+                    <span class="px-2">
+                      {% if ratings.count %}
+                      ({{ ((ratings.up / (ratings.count)) * 100) | int }}% liked)
+                      {% endif %}
+                    </span>
+                    <span><i class="fa-solid fa-thumbs-down"></i> {{ ratings.down }}</span>
+                  {% endif %}
+                {% endblock %}
+              </small>
+              {% endif %}
+            </div>
+            {% if hints %}
+            <div class="challenge-hints d-flex flex-wrap justify-content-end">
+              {% for hint in hints | sort(attribute="cost") %}
+                <div x-data="Hint" x-init="id = {{ hint.id }}">
+                  {% if hint.content %}
+                  <button type="button" class="btn btn-warning btn-sm me-2 mb-0" @click="hintVisible = !hintVisible">
+                    <i class="fas fa-lightbulb me-1"></i>
+                    {% if hint.title %}{{ hint.title }}{% else %}{% trans %}Hint{% endtrans %}{% endif %}
+                  </button>
+                  <div class="challenge-hint-modal" x-show="hintVisible" x-cloak @click.self="hintVisible = false">
+                    <div class="challenge-hint-content">
+                      <button type="button" class="btn-close float-end" @click="hintVisible = false"></button>
+                      <h6 class="fw-semibold mb-3">{% if hint.title %}{{ hint.title }}{% else %}{% trans %}Hint{% endtrans %}{% endif %}</h6>
+                      <div>{{ hint.html | safe }}</div>
+                    </div>
+                  </div>
+                  {% else %}
+                  <button type="button" class="btn btn-warning btn-sm me-2 mb-0" @click="unlockHint()">
+                    <i class="fas fa-lock me-1"></i>
+                    {% if hint.title %}
+                    {{ hint.title }} ({{ hint.cost }} point{{ hint.cost|pluralize }})
+                    {% else %}
+                    {% trans %}Unlock Hint{% endtrans %} ({{ hint.cost }} point{{ hint.cost|pluralize }})
+                    {% endif %}
+                  </button>
+                  <div class="challenge-hint-modal" x-show="hintVisible" x-cloak @click.self="hintVisible = false">
+                    <div class="challenge-hint-content">
+                      <button type="button" class="btn-close float-end" @click="hintVisible = false"></button>
+                      <h6 class="fw-semibold mb-3">{% if hint.title %}{{ hint.title }}{% else %}{% trans %}Hint{% endtrans %}{% endif %}</h6>
+                      <div x-html="html"></div>
+                    </div>
+                  </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+
+          {% if tags %}
+            <div class="challenge-tags pt-2 pb-3">
+              {% block tags %}
+                {% for tag in tags %}
+                  <span class="challenge-tag badge bg-info">{{ tag }}</span>
+                {% endfor %}
+              {% endblock %}
+            </div>
+          {% endif %}
+
+          <div class="challenge-description-group">
+            <h6 class="fw-semibold mb-0">{% trans %}Description{% endtrans %}</h6>
+            <span class="challenge-desc">{% block description %}{{ challenge.html }}{% endblock %}</span>
+          </div>
+
+          <div class="challenge-bottom-section">
+
+          <div class="challenge-connection-section mb-3">
+            {% block connection_info %}
+              {% if challenge.connection_info %}
+                <h6 class="fw-semibold mb-0">{% trans %}Connection Info{% endtrans %}</h6>
+                <div class="challenge-connection-box mt-2">
+                  <span class="challenge-connection-info">
+                    {% set conn = challenge.connection_info %}
+                    {% if conn.startswith("http") %}
+                      {{ conn | urlize(target="_blank") }}
+                    {% else %}
+                      {{ conn }}
+                    {% endif %}
+                  </span>
+                </div>
+              {% endif %}
+            {% endblock %}
+          </div>
+
+          {% if files %}
+            <div class="challenge-file-tree mb-3">
+              <h6 class="fw-semibold mb-2">{% trans %}Attachments{% endtrans %}</h6>
+              <ul class="file-tree-list">
+                {% for file in files %}
+                  {% set segments = file.split('/') %}
+                  {% set token = file.split('?') | last %}
+                  {% if token %}
+                    {% set filename = segments | last | replace("?" + token, "") %}
+                  {% else %}
+                    {% set filename = segments | last %}
+                  {% endif %}
+                  <li>
+                    <a href="{{ file }}" title="{{ filename }}">
+                      <i class="fas fa-download me-2"></i>{{ filename }}
+                    </a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+
+          <template x-if="max_attempts > 0">
+            <p>
+              <span x-text="attempts"></span>/<span x-text="max_attempts"></span> {% trans c=max_attempts %}attempt{% pluralize %}attempts{% endtrans %}
+            </p>
+          </template>
+
+          <div class="solve-artifacts mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label class="form-label fw-semibold mb-0">
+                {% trans %}AI Links / No-AI Declaration{% endtrans %}
+                <span class="text-danger" aria-hidden="true">*</span><span class="visually-hidden">{% trans %}required{% endtrans %}</span>
+              </label>
+              <button type="button" class="btn btn-sm btn-outline-secondary" @click="addAiLink()" :disabled="aiLinks.length >= 20">
+                <i class="fas fa-plus me-1"></i>{% trans %}Add AI Link{% endtrans %}
+              </button>
+            </div>
+            <template x-for="(_aiLink, index) in aiLinks" :key="index">
+              <div class="input-group mb-2">
+                <input class="form-control" type="text" x-model="aiLinks[index]" :placeholder="index === 0 ? 'https://... or no-AI declaration' : `https://... (AI Link ${index + 1})`" required>
+                <button type="button" class="btn btn-outline-danger" @click="removeAiLink(index)" x-show="aiLinks.length > 1" aria-label="Remove AI link">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </template>
+            <small class="form-text text-muted d-block mb-3">{% trans %}Add every AI conversation used, or enter exactly: I did not use AI to solve this challenge.{% endtrans %}</small>
+            <label class="form-label fw-semibold" for="solver-file-{{ challenge.id }}">
+              {% trans %}Solver File{% endtrans %}
+              <span class="text-danger" aria-hidden="true">*</span><span class="visually-hidden">{% trans %}required{% endtrans %}</span>
+            </label>
+            <input id="solver-file-{{ challenge.id }}" class="form-control" type="file" x-ref="solverFile" required>
+            <small class="form-text text-muted">{% trans %}Upload the solver or source code used for this challenge.{% endtrans %}</small>
+          </div>
+
+          <div class="row submit-row">
+            <div class="col pe-0">
+              {% block input %}
+                <input
+                    id="challenge-id" class="challenge-id" type="hidden"
+                    value="{{ challenge.id }}"
+                >
+                <input
+                    id="challenge-input" class="challenge-input form-control" style="font-family: var(--bs-font-monospace)"
+                    type="text" name="submission"
+                    @keyup.enter.prevent="submitChallenge()"
+                    placeholder="{% trans %}COMPFEST18{[A-z0-9_-]+}{% endtrans %}" x-model="submission"
+                >
+              {% endblock %}
+            </div>
+
+            <div class="col-auto mt-3 mt-sm-0 key-submit">
+              {% block submit %}
+                <button
+                    id="challenge-submit"
+                    class="challenge-submit btn btn-primary h-100 px-0 aspect-ratio-1" type="submit"
+                    style="width: 2.5rem"
+                    @click.prevent.debounce.500ms="submitChallenge()"
+                    :disabled="submitting"
+                >
+                  <i class="fas fa-flag"></i>
+                </button>
+              {% endblock %}
+            </div>
+          </div>
+
+          <div class="row notification-row">
+            <div class="col-12">
+              <template x-if="response">
+                <div class="alert text-center w-100 mt-3"
+                    :class="{
+                      'alert-success': response.data.status == 'correct',
+                      'alert-info': response.data.status == 'already_solved',
+                      'alert-danger': response.data.status == 'incorrect' || response.data.status == 'invalid' || response.data.status == 'error',
+                      'alert-warning': response.data.status == 'paused',
+                    }" role="alert"
+                >
+                  <strong x-text="response.data.message"></strong>
+                  <div x-show="(response.data.status == 'correct' || response.data.status == 'already_solved')">
+                    <div x-show="getNextId()">
+                      <button @click="nextChallenge()" class="btn btn-info mt-3">
+                        {% trans %}Next Challenge{% endtrans %}
+                      </button>
+                    </div>
+
+                    {% if Configs.social_shares %}
+                    <div>
+                      <button x-show="!share_url" @click="getShareUrl()" class="btn btn-sm btn-outline-info mt-3">
+                        {% trans %}Share{% endtrans %}
+                      </button>
+                      <div class="btn-group mt-3" role="group" x-show="share_url">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="copyShareUrl()" data-bs-toggle="tooltip" data-bs-title="Copied!">
+                          <i class="fa-solid fa-copy"></i>
+                        </button>
+                        <a :href="'https://twitter.com/intent/tweet?url=' + encodeURIComponent(share_url)" role="button" class="btn btn-sm btn-outline-secondary" target="_blank">
+                          <i class="fa-brands fa-twitter"></i>
+                        </a>
+                        <a :href="'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(share_url)" role="button" class="btn btn-sm btn-outline-secondary" target="_blank">
+                          <i class="fa-brands fa-facebook-f"></i>
+                        </a>
+                        <a :href="'http://www.linkedin.com/shareArticle?url=' + encodeURIComponent(share_url)" role="button" class="btn btn-sm btn-outline-secondary" target="_blank">
+                          <i class="fa-brands fa-linkedin-in"></i>
+                        </a>
+                      </div>
+                    </div>
+                    {% endif %}
+
+                    {% if Configs.challenge_ratings != "disabled" %}
+                    <div class="mt-3">
+                      <hr>
+                      <div class="text-center">
+                        <p class="mb-2">{% trans %}Rate this challenge:{% endtrans %}</p>
+                        <div class="rating-buttons mb-2" x-init="selectedRating = ratingValue || 0;">
+                          <button 
+                            class="btn btn-outline-success me-2" 
+                            :class="{ 'active': selectedRating === 1 }"
+                            @click="selectedRating = 1"
+                          >
+                            <i class="fa-solid fa-thumbs-up"></i>
+                          </button>
+                          <button 
+                            class="btn btn-outline-danger" 
+                            :class="{ 'active': selectedRating === -1 }"
+                            @click="selectedRating = -1"
+                          >
+                            <i class="fa-solid fa-thumbs-down"></i>
+                          </button>
+                        </div>
+                        <div class="mt-3">
+                          <textarea 
+                            class="form-control" 
+                            rows="2" 
+                            x-model="ratingReview"
+                            placeholder="{% trans %}Write a review (optional){% endtrans %}"
+                            maxlength="2000"
+                          ></textarea>
+                        </div>
+                        <div class="mt-3">
+                          <button 
+                            @click="submitRating()"
+                            class="btn btn-primary"
+                            :disabled="!selectedRating"
+                          >
+                            {% trans %}Submit{% endtrans %}
+                          </button>
+                        </div>
+                        <div x-show="ratingSubmitted" class="text-success mt-2">
+                          <small>{% trans %}Thank you for your rating!{% endtrans %}</small>
+                        </div>
+                      </div>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          {% block submissions %}
+          {% if Configs.view_self_submissions %}
+          <div class="mt-3">
+            <button class="btn btn-sm btn-outline-secondary" @click="showSubmissions()" x-show="!submissionsVisible">
+              {% trans %}View Submissions{% endtrans %}
+            </button>
+            <div x-show="submissionsVisible" x-cloak>
+              <h6 class="mt-3">{% trans %}Submissions{% endtrans %}</h6>
+              <table class="table table-striped align-middle text-center table-sm">
+                <thead>
+                <tr>
+                  <th>{% trans %}Submission{% endtrans %}</th>
+                  <th>{% trans %}Type{% endtrans %}</th>
+                  <th>{% trans %}Date{% endtrans %}</th>
+                </tr>
+                </thead>
+                <tbody>
+                <template x-for="submission in submissions">
+                  <tr>
+                    <td x-data="{ truncate: true }">
+                      <code x-text="truncate ? '*'.repeat(submission.provided.length) : submission.provided"></code>
+                      <button class="btn btn-link p-0 pl-1" @click="truncate = !truncate">
+                        <i :class="truncate ? 'fas fa-eye' : 'fas fa-eye-slash'"></i>
+                      </button>
+                    </td>
+                    <td x-text="submission.type"></td>
+                    <td x-text="submission.date"></td>
+                  </tr>
+                </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {% endif %}
+          {% endblock %}
+
+          {% block solution %}
+          <div x-show="getSolutionId()" class="mt-3">
+            <button class="btn btn-sm btn-outline-secondary" @click="showSolution()" x-show="!solutionVisible">
+              {% trans %}View Solution{% endtrans %}
+            </button>
+            <div x-show="solutionVisible" x-cloak>
+              <h6 class="mt-3">{% trans %}Solution{% endtrans %}</h6>
+              <template x-if="solution">
+                <div x-html="solution" style="white-space: pre-wrap;"></div>
+              </template>
+            </div>
+          </div>
+          {% endblock %}
+          </div>
+        </div>
+
+        {% block solves %}
+        {% if solves != None %}
+        <div class="challenge-solves-col" :class="{ 'is-collapsed': solvesCollapsed }">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary challenge-solves-toggle"
+            @click="toggleSolves()"
+            :aria-expanded="(!solvesCollapsed).toString()"
+            aria-controls="challenge-solves-list"
+            :aria-label="solvesCollapsed ? 'Expand solves panel' : 'Collapse solves panel'"
+            :title="solvesCollapsed ? 'Expand solves panel' : 'Collapse solves panel'"
+          >
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <div class="challenge-solves-clip" id="challenge-solves-list" :aria-hidden="solvesCollapsed.toString()">
+            <div class="challenge-solves-content">
+              <div class="challenge-solves-header">
+                <h6 class="mb-0 challenge-solves-title">
+                  {{ ngettext("%(num)d Solve", "%(num)d Solves", solves) }}
+                </h6>
+              </div>
+              <div class="challenge-solves-list">
+                <table class="table table-sm align-middle">
+                  <thead>
+                  <tr>
+                    <th>{% trans %}Name{% endtrans %}</th>
+                    <th>{% trans %}Date{% endtrans %}</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <template x-for="solve in solves">
+                    <tr>
+                      <td>
+                        <a :href="solve.account_url" x-text="solve.name"></a>
+                      </td>
+                      <td><small x-text="solve.date"></small></td>
+                    </tr>
+                  </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endblock %}
+      </div>
+    </div>
+  </div>
+</div>

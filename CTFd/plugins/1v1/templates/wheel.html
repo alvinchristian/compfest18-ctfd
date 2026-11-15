@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .onevone-stage { min-height: calc(100vh - 150px); background: radial-gradient(circle at top, rgba(111, 66, 193, .12), transparent 45%); }
+  .onevone-wheel-shell { position: relative; width: min(76vw, 580px); margin: 0 auto; }
+  .onevone-pointer { position: absolute; z-index: 2; left: 50%; top: -4px; transform: translateX(-50%); width: 0; height: 0; border-left: 22px solid transparent; border-right: 22px solid transparent; border-top: 42px solid #dc3545; filter: drop-shadow(0 3px 2px rgba(0,0,0,.3)); }
+  #onevone-wheel { display: block; width: 100%; height: auto; border: 8px solid var(--primary, #007bff); border-radius: 50%; box-shadow: 0 18px 45px rgba(0,0,0,.24); background: #fff; transition: transform 5.2s cubic-bezier(.12,.78,.12,1); }
+  .onevone-spin { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 122px; height: 122px; border-radius: 50%; border: 7px solid #fff; box-shadow: 0 5px 16px rgba(0,0,0,.3); font-weight: 700; letter-spacing: .08em; }
+  .onevone-spin:disabled { cursor: wait; }
+  .onevone-empty { max-width: 560px; margin: 7rem auto; }
+  .onevone-result { position: fixed; z-index: 2000; inset: 0; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(14, 12, 25, .72); }
+  .onevone-result.is-visible { display: flex; animation: onevone-fade .25s ease-out; }
+  .onevone-result-card { width: min(92vw, 620px); padding: 3rem 2rem; text-align: center; border-radius: 1rem; color: #fff; background: linear-gradient(135deg, #6f42c1, #e83e8c); box-shadow: 0 25px 70px rgba(0,0,0,.48); animation: onevone-pop .45s cubic-bezier(.2,1.4,.3,1); }
+  .onevone-result-card h2 { font-size: clamp(2.2rem, 7vw, 4.5rem); overflow-wrap: anywhere; }
+  .onevone-sparkles { color: #ffd43b; font-size: 2.4rem; letter-spacing: .35em; }
+  @keyframes onevone-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes onevone-pop { from { transform: scale(.5) rotate(-4deg); } to { transform: scale(1) rotate(0); } }
+  @media (prefers-reduced-motion: reduce) { #onevone-wheel { transition-duration: .01ms; } .onevone-result-card { animation: none; } }
+</style>
+
+<div class="onevone-stage py-5">
+  <div class="container text-center">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+      <a class="btn btn-outline-secondary" href="{{ url_for('onevone.bracket_configuration') }}"><i class="fas fa-arrow-left me-1"></i> Match control</a>
+      <h1 class="h2 mb-0">1v1 Spin Wheel</h1>
+      <span style="width: 130px"></span>
+    </div>
+
+    {% if active_match and game_ready and categories %}
+      <p class="text-muted mb-2">Game {{ active_match.games|length + 1 }} · {{ active_match.team_one_entry.team.name }} vs {{ active_match.team_two_entry.team.name }} · BO{{ active_match.effective_best_of }}</p>
+      <p class="text-muted mb-4">Press the wheel to reveal a challenge visible only to these two teams. Categories used earlier in this match are removed.</p>
+      <div class="onevone-wheel-shell">
+        <div class="onevone-pointer" aria-hidden="true"></div>
+        <canvas id="onevone-wheel" width="760" height="760" role="img" aria-label="Category selection wheel"></canvas>
+        <button id="onevone-spin" class="onevone-spin btn btn-primary" type="button">SPIN</button>
+      </div>
+    {% elif not active_match %}
+      <div class="onevone-empty card shadow-sm">
+        <div class="card-body p-5">
+          <i class="fas fa-gamepad fa-4x text-primary mb-4"></i>
+          <h2 class="h3">No active match</h2>
+          <p class="text-muted">Start the next eligible match from bracket control before spinning the wheel.</p>
+          <a class="btn btn-primary" href="{{ url_for('onevone.bracket_configuration') }}">Open match control</a>
+        </div>
+      </div>
+    {% elif not draft_complete %}
+      <div class="onevone-empty card shadow-sm">
+        <div class="card-body p-5">
+          <i class="fas fa-ban fa-4x text-primary mb-4"></i>
+          <h2 class="h3">Category draft in progress</h2>
+          <p class="text-muted">Both teams must finish their category bans before the wheel unlocks.</p>
+          <a class="btn btn-primary" href="{{ url_for('onevone.draft_pick') }}">Watch draft pick</a>
+        </div>
+      </div>
+    {% elif not game_ready %}
+      <div class="onevone-empty card shadow-sm">
+        <div class="card-body p-5">
+          <i class="fas fa-hourglass-half fa-4x text-primary mb-4"></i>
+          <h2 class="h3">Current game is still in progress</h2>
+          <p class="text-muted">Wait for a solve or adjust the score, then click Next game from match control.</p>
+          <a class="btn btn-primary" href="{{ url_for('onevone.bracket_configuration') }}">Open match control</a>
+        </div>
+      </div>
+    {% else %}
+      <div class="onevone-empty card shadow-sm">
+        <div class="card-body p-5">
+          <i class="fas fa-dharmachakra fa-4x text-primary mb-4"></i>
+          <h2 class="h3">{% if configured_categories %}No eligible categories remain{% else %}The wheel is empty{% endif %}</h2>
+          <p class="text-muted">{% if configured_categories %}This match has used all available categories, or no hidden challenge remains in its unused categories.{% else %}Choose one or more challenge categories before spinning.{% endif %}</p>
+          <a class="btn btn-primary" href="{{ url_for('onevone.configuration') }}">Configure wheel</a>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="onevone-result" class="onevone-result" role="dialog" aria-modal="true" aria-labelledby="onevone-result-category">
+  <div class="onevone-result-card">
+    <div class="onevone-sparkles" aria-hidden="true">✦ ✦ ✦</div>
+    <p class="text-uppercase fw-bold mb-2">The wheel chose</p>
+    <h2 id="onevone-result-category" class="fw-bold mb-4"></h2>
+    <p id="onevone-result-challenge" class="lead mb-4"></p>
+    <button id="onevone-result-close" class="btn btn-light btn-lg" type="button">Spin again</button>
+  </div>
+</div>
+
+{% if active_match and game_ready and categories %}
+<script>
+  (() => {
+    const categories = {{ categories | tojson }};
+    const canvas = document.getElementById("onevone-wheel");
+    const context = canvas.getContext("2d");
+    const spinButton = document.getElementById("onevone-spin");
+    const result = document.getElementById("onevone-result");
+    const resultCategory = document.getElementById("onevone-result-category");
+    const resultChallenge = document.getElementById("onevone-result-challenge");
+    const closeButton = document.getElementById("onevone-result-close");
+    const colors = ["#6f42c1", "#e83e8c", "#007bff", "#20c997", "#fd7e14", "#dc3545", "#17a2b8", "#6610f2"];
+    const size = canvas.width;
+    const center = size / 2;
+    const radius = center - 10;
+    const slice = (Math.PI * 2) / categories.length;
+    let rotation = 0;
+    let spinning = false;
+
+    function drawWheel() {
+      context.clearRect(0, 0, size, size);
+      context.font = "700 28px Arial, sans-serif";
+      context.textAlign = "right";
+      context.textBaseline = "middle";
+
+      categories.forEach((category, index) => {
+        const start = -Math.PI / 2 + index * slice;
+        const end = start + slice;
+        context.beginPath();
+        context.moveTo(center, center);
+        context.arc(center, center, radius, start, end);
+        context.closePath();
+        context.fillStyle = colors[index % colors.length];
+        context.fill();
+        context.strokeStyle = "rgba(255,255,255,.9)";
+        context.lineWidth = 4;
+        context.stroke();
+
+        context.save();
+        context.translate(center, center);
+        context.rotate(start + slice / 2);
+        context.fillStyle = "#fff";
+        context.shadowColor = "rgba(0,0,0,.45)";
+        context.shadowBlur = 3;
+        const label = category.length > 22 ? `${category.slice(0, 21)}…` : category;
+        context.fillText(label, radius - 28, 0);
+        context.restore();
+      });
+    }
+
+    function showResult(selection) {
+      resultCategory.textContent = selection.category;
+      resultChallenge.textContent = `Challenge revealed: ${selection.challenge.name}`;
+      result.classList.add("is-visible");
+      closeButton.focus();
+    }
+
+    async function spin() {
+      if (spinning) return;
+      spinning = true;
+      spinButton.disabled = true;
+      let selection;
+      try {
+        const formData = new FormData();
+        formData.append("nonce", {{ Session.nonce | tojson }});
+        const response = await fetch({{ url_for('onevone.spin') | tojson }}, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Accept": "application/json", "CSRF-Token": {{ Session.nonce | tojson }} },
+          body: formData,
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.message || "Unable to spin the wheel.");
+        selection = payload.data;
+      } catch (error) {
+        spinning = false;
+        spinButton.disabled = false;
+        window.alert(error.message || "Unable to spin the wheel. Please try again.");
+        return;
+      }
+
+      const chosenIndex = categories.indexOf(selection.category);
+      if (chosenIndex < 0) {
+        window.location.reload();
+        return;
+      }
+      const current = ((rotation % 360) + 360) % 360;
+      const chosenCenter = (chosenIndex + .5) * (360 / categories.length);
+      const target = (360 - chosenCenter) % 360;
+      rotation += ((target - current + 360) % 360) + 360 * 7;
+      canvas.style.transform = `rotate(${rotation}deg)`;
+
+      canvas.addEventListener("transitionend", () => {
+        spinning = false;
+        spinButton.disabled = false;
+        showResult(selection);
+      }, { once: true });
+    }
+
+    spinButton.addEventListener("click", spin);
+    canvas.addEventListener("click", spin);
+    closeButton.addEventListener("click", () => result.classList.remove("is-visible"));
+    result.addEventListener("click", (event) => {
+      if (event.target === result) result.classList.remove("is-visible");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") result.classList.remove("is-visible");
+    });
+    drawWheel();
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "container_base.html" %}
+{% block menu %}{% include "config/container_menu.html" %}{% endblock %}
+{% block panel %}
+<h4>Port Request Queue <small id="count" class="text-muted"></small></h4>
+<table class="table table-striped"><thead><tr><th>Request</th><th>Team/User</th><th>Challenge</th><th>Created</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+function refreshQueue(){fetch('{{ url_for("containers_admin.queue_state") }}').then(r=>r.json()).then(d=>{document.getElementById('count').textContent='('+d.count+')';document.getElementById('rows').innerHTML=d.requests.map(x=>`<tr><td><code>${x.uuid}</code></td><td>${x.account_id}</td><td>${x.challenge_id}</td><td>${x.created_at}</td><td><button class="btn btn-sm btn-danger" onclick="removeQueue(${x.id})">Remove</button></td></tr>`).join('')||'<tr><td colspan="5">Queue is empty.</td></tr>';});}
+function removeQueue(id){fetch('/admin/containers/api/queue/'+id,{method:'DELETE',headers:{'CSRF-Token':init.csrfNonce}}).then(refreshQueue)}
+refreshQueue();setInterval(refreshQueue,2000);
+</script>
+{% endblock %}

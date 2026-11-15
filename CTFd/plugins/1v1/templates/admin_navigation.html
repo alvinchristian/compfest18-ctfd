@@ -1,0 +1,119 @@
+<style>
+  .onevone-admin-layout { display: flex; align-items: flex-start; gap: 1.5rem; }
+  .onevone-admin-sidebar { flex: 0 0 230px; position: sticky; top: 1rem; }
+  .onevone-admin-sidebar .list-group-item { border-color: #dbe8f8; color: #24517f; }
+  .onevone-admin-sidebar .list-group-item:hover { background: #edf5ff; }
+  .onevone-admin-sidebar .list-group-item.active { background: #1769aa; border-color: #1769aa; color: #fff; }
+  .onevone-admin-sidebar__title { color: #145dbf; font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .onevone-admin-content { min-width: 0; flex: 1 1 auto; }
+  @media (max-width: 767.98px) {
+    .onevone-admin-layout { display: block; }
+    .onevone-admin-sidebar { position: static; margin-bottom: 1rem; }
+    .onevone-admin-sidebar .list-group { display: flex; flex-wrap: wrap; }
+    .onevone-admin-sidebar .list-group-item { flex: 1 1 150px; }
+  }
+</style>
+<aside class="onevone-admin-sidebar" aria-label="1v1 administration">
+  <div class="onevone-admin-sidebar__title mb-2">1v1 Tournament</div>
+  <div class="list-group shadow-sm">
+    <a class="list-group-item list-group-item-action {% if request.endpoint == 'onevone.configuration' %}active{% endif %}" href="{{ url_for('onevone.configuration') }}">
+      <i class="fas fa-dharmachakra fa-fw mr-2"></i>Wheel settings
+    </a>
+    <a class="list-group-item list-group-item-action {% if request.endpoint == 'onevone.bracket_configuration' %}active{% endif %}" href="{{ url_for('onevone.bracket_configuration') }}">
+      <i class="fas fa-sitemap fa-fw mr-2"></i>Bracket
+    </a>
+    <a class="list-group-item list-group-item-action" href="{{ url_for('onevone.draft_pick') }}">
+      <i class="fas fa-ban fa-fw mr-2"></i>Draft Pick
+      <span class="badge badge-primary float-right mt-1">Live</span>
+    </a>
+  </div>
+  <div class="mt-3">
+    <button type="button" class="btn btn-sm btn-outline-primary w-100" id="onevone-enable-first-blood">
+      <i class="fas fa-volume-up mr-1"></i> Enable first-blood audio
+    </button>
+    <audio id="onevone-first-blood-audio" preload="auto" src="/themes/{{ Configs.ctf_theme }}/static/sounds/firstblood.mp3"></audio>
+    <audio id="onevone-timer-expired-audio" preload="auto" src="/themes/{{ Configs.ctf_theme }}/static/sounds/match-time-expired.wav"></audio>
+  </div>
+</aside>
+<script>
+  (() => {
+    const eventStream = {{ url_for('events.subscribe') | tojson }};
+    const audio = document.getElementById("onevone-first-blood-audio");
+    const alarm = document.getElementById("onevone-timer-expired-audio");
+    const enable = document.getElementById("onevone-enable-first-blood");
+    const storageKey = "onevone-last-first-blood";
+    let audioUnlocked = false;
+    let pendingPlayback = false;
+    let pendingAlarm = false;
+    const unlockAudio = () => {
+      if (audioUnlocked) return;
+      const prime = (sound) => {
+        sound.muted = true;
+        const promise = sound.play();
+        return promise && promise.then ? promise.then(() => {
+          sound.pause();
+          sound.currentTime = 0;
+          sound.muted = false;
+        }) : Promise.resolve();
+      };
+      const promise = Promise.all([prime(audio), prime(alarm)]);
+      if (promise && promise.then) {
+        promise.then(() => {
+          audioUnlocked = true;
+          enable.innerHTML = '<i class="fas fa-volume-up mr-1"></i> First-blood audio enabled';
+          if (pendingPlayback) {
+            pendingPlayback = false;
+            audio.play().catch(() => {});
+          }
+          if (pendingAlarm) {
+            pendingAlarm = false;
+            alarm.play().catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    };
+    enable.addEventListener("click", () => {
+      unlockAudio();
+    });
+    document.addEventListener("click", unlockAudio, { passive: true });
+    document.addEventListener("keydown", unlockAudio, { passive: true });
+    // Prime the audio elements silently. Browsers that require a gesture will
+    // leave playback pending until the administrator clicks or presses a key.
+    unlockAudio();
+    const playFirstBlood = (event) => {
+      if (!event || !event.id) return;
+      let previous = null;
+      try { previous = window.localStorage.getItem(storageKey); } catch (_) {}
+      if (String(event.id) === previous) return;
+      try { window.localStorage.setItem(storageKey, String(event.id)); } catch (_) {}
+      audio.currentTime = 0;
+      if (audioUnlocked) {
+        audio.play().catch(() => {});
+      } else {
+        pendingPlayback = true;
+        enable.classList.remove("btn-outline-primary");
+        enable.classList.add("btn-warning");
+        enable.textContent = "Click anywhere to enable first-blood audio";
+      }
+    };
+    const playAlarm = (event) => {
+      if (!event || !event.id) return;
+      alarm.currentTime = 0;
+      if (audioUnlocked) {
+        alarm.play().catch(() => {});
+      } else {
+        pendingAlarm = true;
+        enable.classList.remove("btn-outline-primary");
+        enable.classList.add("btn-warning");
+        enable.textContent = "Click anywhere to enable match alarm";
+      }
+    };
+    const stream = new EventSource(eventStream, { withCredentials: true });
+    stream.addEventListener("onevone_first_blood", (message) => {
+      try { playFirstBlood(JSON.parse(message.data)); } catch (_) {}
+    });
+    stream.addEventListener("onevone_timer_expired", (message) => {
+      try { playAlarm(JSON.parse(message.data)); } catch (_) {}
+    });
+  })();
+</script>

@@ -1,0 +1,35 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+	<div class="jumbotron">
+		<div class="container">
+			<h1>First Blood Sender</h1>
+		</div>
+	</div>
+	<div class="container">
+		<div class="row">
+			<div class="col-md-12">
+				<form method="POST" id="firstbot_form">
+                    <input type="hidden" value="{{ Session.nonce }}" name="nonce">
+                    <div class="form-group">
+                        <label for="firstbot_endpoint">
+                            <b>API Endpoint</b>
+                        </label>
+                        <input class="form-control" id="firstbot_endpoint" name="firstbot_endpoint" type="text" placeholder="https://mybot.com/api/v1/firstbot"
+                            {% if firstbot_endpoint is defined and firstbot_endpoint != None %}value="{{ firstbot_endpoint }}"{% endif %}>
+                        <small class="form-text text-muted">URL that will used to send data everytime first blood happened</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="firstbot_secret">
+                            <b>Secret Key</b>
+                        </label>
+                        <input class="form-control" id="firstbot_secret" name="firstbot_secret" type="text"
+                            {% if firstbot_secret is defined and firstbot_secret != None %}value="{{ firstbot_secret }}"{% endif %}>
+                        <small class="form-text text-muted">Random string to make sure data integrity</small>
+                    </div>
+		            <button type="submit" class="btn btn-md btn-primary float-right">Update</button>
+				</form>
+			</div>
+		</div>
+	</div>
+{% endblock %}

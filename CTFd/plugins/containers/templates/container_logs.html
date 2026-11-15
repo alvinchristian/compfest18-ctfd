@@ -1,0 +1,75 @@
+{% extends "container_base.html" %}
+{% block menu %}{% include "config/container_menu.html" %}{% endblock %}
+{% block panel %}
+<h4><i class="fas fa-file-alt"></i> Container Logs</h4>
+<div class="alert alert-secondary d-flex justify-content-between align-items-center">
+ <span>Stop-time log collection: <strong id="collection-status">Loading...</strong></span>
+ <span>
+  <button class="btn btn-sm btn-success" id="collection-enable" type="button">Enable</button>
+  <button class="btn btn-sm btn-danger" id="collection-disable" type="button">Disable</button>
+ </span>
+</div>
+<div class="mb-3">
+ <a class="btn btn-primary" href="{{ url_for('containers_admin.download_container_logs') }}"><i class="fas fa-download"></i> Download all logs</a>
+ <form class="d-inline" method="post" action="{{ url_for('containers_admin.import_container_logs') }}" enctype="multipart/form-data">
+  <input type="file" name="archive" accept=".gz,.tar.gz" required><button class="btn btn-secondary" type="submit">Import archive</button>
+ </form>
+</div>
+<form class="form-row mb-3" method="get">
+ <div class="col"><input class="form-control" name="team_id" value="{{ team_id or '' }}" placeholder="Team ID"></div>
+ <div class="col"><input class="form-control" name="challenge_id" value="{{ challenge_id or '' }}" placeholder="Challenge ID"></div>
+ <div class="col"><input class="form-control" name="container_id" value="{{ container_id }}" placeholder="Container ID"></div>
+ <div class="col"><input class="form-control" name="q" value="{{ query }}" placeholder="Search log text"></div>
+ <div class="col"><button class="btn btn-primary" type="submit">Filter</button></div>
+</form>
+{% if grouped_logs %}
+ {% for team_group in grouped_logs %}
+ <div class="card mb-4">
+  <div class="card-header"><strong><i class="fas fa-users"></i>
+   {{ team_group.team.name if team_group.team else 'Team/Account #' ~ team_group.account_id }}
+  </strong></div>
+  <div class="card-body p-0">
+   {% for challenge_key, challenge_group in team_group.challenges.items() %}
+   <div class="border-bottom p-3">
+    <h6><i class="fas fa-flag"></i>
+     {{ challenge_group.challenge.name if challenge_group.challenge else 'Challenge #' ~ challenge_group.challenge_id }}
+    </h6>
+    <div class="table-responsive"><table class="table table-sm table-striped mb-0">
+     <thead><tr><th>Time</th><th>Container</th><th>Instance</th><th>Stream</th><th>Message</th></tr></thead>
+     <tbody>
+      {% for log in challenge_group.logs %}
+      <tr><td class="text-nowrap">{{ log.timestamp }}</td><td><code>{{ log.container_id }}</code></td><td>{{ log.instance_uuid }}</td><td>{{ log.stream }}</td><td><pre class="mb-0">{{ log.message }}</pre></td></tr>
+      {% endfor %}
+     </tbody>
+    </table></div>
+   </div>
+   {% endfor %}
+  </div>
+ </div>
+ {% endfor %}
+{% else %}
+ <div class="alert alert-info">No logs found.</div>
+{% endif %}
+<script>
+(() => {
+ const status = document.getElementById('collection-status');
+ const enable = document.getElementById('collection-enable');
+ const disable = document.getElementById('collection-disable');
+ const endpoint = '{{ url_for("containers_admin.container_log_collection") }}';
+ function refresh() {
+  fetch(endpoint).then(r => r.json()).then(data => {
+   status.textContent = data.enabled ? 'Enabled' : 'Disabled';
+   enable.disabled = data.enabled;
+   disable.disabled = !data.enabled;
+  });
+ }
+ function setEnabled(enabled) {
+  fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', 'CSRF-Token': init.csrfNonce}, body: JSON.stringify({enabled})})
+   .then(r => r.json()).then(refresh);
+ }
+ enable.onclick = () => setEnabled(true);
+ disable.onclick = () => { if (confirm('Disable archiving of logs when containers stop?')) setEnabled(false); };
+ refresh();
+})();
+</script>
+{% endblock %}
